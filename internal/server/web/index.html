@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#10231c">
+  <title>NetProbe 网络适配检测</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="NetProbe 首页"><span class="brand-mark">N</span><span>NetProbe</span></a>
+    <span class="service"><i></i>检测服务在线</span>
+  </header>
+
+  <main>
+    <section class="intro">
+      <div>
+        <p class="eyebrow">网络适配检测</p>
+        <h1>确认当前网络<br>是否满足连接要求</h1>
+        <p class="lead">快速检查公网出口与 HTTPS 连通性。需要 UDP 和 NAT 行为结论时，运行下方的一键深度检测。</p>
+      </div>
+      <aside class="verdict-panel" id="verdictPanel" aria-live="polite">
+        <div class="dial" id="dial"><span id="dialText">待检测</span></div>
+        <div>
+          <p class="panel-label">快速检测结果</p>
+          <h2 id="verdictTitle">尚未开始</h2>
+          <p id="verdictDetail">点击开始后，通常可在 2 秒内完成。</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="actions" aria-label="检测操作">
+      <button class="primary" id="startButton" type="button">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+        开始检测
+      </button>
+      <span class="privacy">不会扫描局域网，也不需要摄像头或麦克风权限</span>
+    </section>
+
+    <section class="results" aria-labelledby="resultHeading">
+      <div class="section-head">
+        <div><p class="eyebrow">检测项目</p><h2 id="resultHeading">当前网络画像</h2></div>
+        <time id="testedAt">等待检测</time>
+      </div>
+      <div class="metric-grid">
+        <article class="metric"><span>公网 IPv4 / IPv6</span><strong id="publicIP">--</strong><small id="ipStatus">等待获取</small></article>
+        <article class="metric"><span>HTTPS 连接</span><strong id="httpsResult">--</strong><small>浏览器到检测服务</small></article>
+        <article class="metric"><span>UDP / STUN 路径</span><strong id="udpResult">--</strong><small id="udpStatus">通过 WebRTC ICE 快速判断</small></article>
+        <article class="metric"><span>NAT 映射行为</span><strong>需深度检测</strong><small>使用同一端口访问双探测端口</small></article>
+      </div>
+    </section>
+
+    <section class="deep-test" aria-labelledby="deepHeading">
+      <div class="section-head">
+        <div><p class="eyebrow">完整诊断</p><h2 id="deepHeading">一条命令完成深度检测</h2></div>
+        <div class="tabs" role="tablist" aria-label="操作系统">
+          <button class="tab active" id="linuxTab" role="tab" aria-selected="true">Linux</button>
+          <button class="tab" id="windowsTab" role="tab" aria-selected="false">Windows</button>
+        </div>
+      </div>
+      <p class="deep-copy">自动识别系统架构、下载并校验客户端、运行 UDP/NAT 测试，完成后清理临时文件。</p>
+      <div class="command-row">
+        <code id="command"></code>
+        <button class="icon-button" id="copyButton" type="button" title="复制命令" aria-label="复制命令">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="1"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>
+        </button>
+      </div>
+      <div class="deep-facts">
+        <span>UDP 双端口</span><span>映射稳定性</span><span>备用端口回包</span><span>RTT 与丢包</span>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>NetProbe</span><span>检测只代表当前设备、当前网络和本次测试时间。</span></footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>

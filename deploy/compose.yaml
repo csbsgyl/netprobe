@@ -1,0 +1,44 @@
+services:
+  netprobe:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ${NETPROBE_IMAGE:-netprobe:local}
+    restart: unless-stopped
+    environment:
+      NETPROBE_HTTP_ADDR: ":8080"
+      NETPROBE_PUBLIC_HOST: "${DOMAIN}"
+      NETPROBE_UDP_BIND_HOST: "0.0.0.0"
+      NETPROBE_UDP_PORTS: "${UDP_PORT_PRIMARY:-3478},${UDP_PORT_ALTERNATE:-3479}"
+      NETPROBE_SECRET: "${NETPROBE_SECRET}"
+      NETPROBE_SESSION_TTL: "5m"
+      NETPROBE_DOWNLOAD_DIR: "/srv/downloads"
+    ports:
+      - "${UDP_PORT_PRIMARY:-3478}:${UDP_PORT_PRIMARY:-3478}/udp"
+      - "${UDP_PORT_ALTERNATE:-3479}:${UDP_PORT_ALTERNATE:-3479}/udp"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    depends_on:
+      netprobe:
+        condition: service_healthy
+    environment:
+      DOMAIN: "${DOMAIN}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
