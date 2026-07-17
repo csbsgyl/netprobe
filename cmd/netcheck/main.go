@@ -115,7 +115,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 	flags.SetOutput(flagOutput)
 	flags.StringVar(&opts.server, "server", opts.server, "netprobe server URL")
-	flags.BoolVar(&opts.json, "json", false, "write the result as JSON")
+	flags.BoolVar(&opts.json, "json", opts.json, "write the result as JSON")
 	flags.DurationVar(&opts.timeout, "timeout", opts.timeout, "overall timeout (for example 10s)")
 	flags.Usage = func() {
 		fmt.Fprintln(flagOutput, "Usage: netcheck [--server URL] [--json] [--timeout DURATION]")
