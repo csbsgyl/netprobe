@@ -1,6 +1,9 @@
 .git
 .github
 .tmp
+node_modules
+.pnpm-store
+web/dist
 bin
 dist
 data

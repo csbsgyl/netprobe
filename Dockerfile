@@ -1,4 +1,13 @@
 # syntax=docker/dockerfile:1
+FROM node:22-alpine AS web-build
+WORKDIR /src
+RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY web/package.json web/package.json
+RUN pnpm install --frozen-lockfile
+COPY web ./web
+RUN pnpm --dir web build
+
 FROM golang:1.22-alpine AS build
 ARG VERSION=dev
 WORKDIR /src
@@ -18,6 +27,7 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata && addgroup -S netprobe && adduser -S -G netprobe netprobe
 COPY --from=build /out/netprobe-server /usr/local/bin/netprobe-server
 COPY --from=build /out/downloads /srv/downloads
+COPY --from=web-build /src/web/dist /srv/web
 USER netprobe
 EXPOSE 8080/tcp 3478/udp 3479/udp
 ENTRYPOINT ["/usr/local/bin/netprobe-server"]

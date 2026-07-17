@@ -12,6 +12,12 @@ import (
 	"github.com/csbsgyl/netprobe/internal/protocol"
 )
 
+const (
+	maxSessions            = 10_000
+	maxSessionObservations = 64
+	maxCleanupInterval     = time.Minute
+)
+
 type Session struct {
 	ID           string
 	Token        string
@@ -28,6 +34,7 @@ type SessionStore struct {
 	sessions map[string]*Session
 	secret   []byte
 	ttl      time.Duration
+	nextGC   time.Time
 }
 
 func NewSessionStore(secret string, ttl time.Duration) *SessionStore {
@@ -43,6 +50,18 @@ func (s *SessionStore) Create(publicIP string, client protocol.ClientInfo) (*Ses
 	session := &Session{ID: id, PublicIP: publicIP, Client: client, CreatedAt: now, ExpiresAt: now.Add(s.ttl)}
 	session.Token = s.sign(session.ID, session.ExpiresAt)
 	s.mu.Lock()
+	if !now.Before(s.nextGC) || len(s.sessions) >= maxSessions {
+		s.removeExpiredLocked(now)
+		interval := s.ttl / 2
+		if interval <= 0 || interval > maxCleanupInterval {
+			interval = maxCleanupInterval
+		}
+		s.nextGC = now.Add(interval)
+	}
+	if len(s.sessions) >= maxSessions {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("too many active sessions")
+	}
 	s.sessions[id] = session
 	s.mu.Unlock()
 	return cloneSession(session), nil
@@ -72,8 +91,16 @@ func (s *SessionStore) AuthorizeProbe(id, token string) (*Session, bool) {
 func (s *SessionStore) Record(id string, observation protocol.UDPObservation) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if session, ok := s.sessions[id]; ok && time.Now().Before(session.ExpiresAt) {
+	if session, ok := s.sessions[id]; ok && time.Now().Before(session.ExpiresAt) && len(session.ServerProbes) < maxSessionObservations {
 		session.ServerProbes = append(session.ServerProbes, observation)
+	}
+}
+
+func (s *SessionStore) removeExpiredLocked(now time.Time) {
+	for id, session := range s.sessions {
+		if !now.Before(session.ExpiresAt) {
+			delete(s.sessions, id)
+		}
 	}
 }
 

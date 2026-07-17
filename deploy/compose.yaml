@@ -13,6 +13,7 @@ services:
       NETPROBE_SECRET: "${NETPROBE_SECRET}"
       NETPROBE_SESSION_TTL: "5m"
       NETPROBE_DOWNLOAD_DIR: "/srv/downloads"
+      NETPROBE_WEB_DIR: "/srv/web"
     ports:
       - "${UDP_PORT_PRIMARY:-3478}:${UDP_PORT_PRIMARY:-3478}/udp"
       - "${UDP_PORT_ALTERNATE:-3479}:${UDP_PORT_ALTERNATE:-3479}/udp"

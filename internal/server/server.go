@@ -2,14 +2,14 @@ package server
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,9 +17,6 @@ import (
 
 	"github.com/csbsgyl/netprobe/internal/protocol"
 )
-
-//go:embed web/*
-var webFiles embed.FS
 
 type Server struct {
 	config Config
@@ -84,9 +81,46 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/install.sh", s.installShell)
 	mux.HandleFunc("/install.ps1", s.installPowerShell)
 	mux.Handle("/downloads/", http.StripPrefix("/downloads/", http.FileServer(http.Dir(s.config.DownloadDir))))
-	assets, _ := fs.Sub(webFiles, "web")
-	mux.Handle("/", s.rootOrAssets(http.FileServer(http.FS(assets))))
+	mux.Handle("/", s.rootOrAssets(spaFileServer(s.config.WebDir)))
 	return s.logging(mux)
+}
+
+func spaFileServer(root string) http.Handler {
+	if strings.TrimSpace(root) == "" {
+		return http.NotFoundHandler()
+	}
+	files := http.FileServer(http.Dir(root))
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet && request.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		cleanPath := filepath.Clean("/" + request.URL.Path)
+		name := filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(cleanPath, "/")))
+		if info, err := os.Stat(name); err == nil && (!info.IsDir() || cleanPath == "/") {
+			if cleanPath == "/" || filepath.Base(cleanPath) == "index.html" {
+				w.Header().Set("Cache-Control", "no-cache")
+			} else if strings.HasPrefix(cleanPath, "/assets/") {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			files.ServeHTTP(w, request)
+			return
+		}
+
+		if !strings.Contains(request.Header.Get("Accept"), "text/html") {
+			http.NotFound(w, request)
+			return
+		}
+		index := filepath.Join(root, "index.html")
+		if _, err := os.Stat(index); err != nil {
+			http.NotFound(w, request)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, request, index)
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {

@@ -12,6 +12,7 @@ type Config struct {
 	HTTPAddr      string
 	PublicHost    string
 	DownloadDir   string
+	WebDir        string
 	UDPBindHost   string
 	UDPPorts      []int
 	SessionTTL    time.Duration
@@ -31,6 +32,7 @@ func ConfigFromEnv() (Config, error) {
 		HTTPAddr:      env("NETPROBE_HTTP_ADDR", ":8080"),
 		PublicHost:    env("NETPROBE_PUBLIC_HOST", "127.0.0.1"),
 		DownloadDir:   env("NETPROBE_DOWNLOAD_DIR", "/srv/downloads"),
+		WebDir:        env("NETPROBE_WEB_DIR", "web/dist"),
 		UDPBindHost:   env("NETPROBE_UDP_BIND_HOST", "0.0.0.0"),
 		UDPPorts:      ports,
 		SessionTTL:    durationEnv("NETPROBE_SESSION_TTL", 5*time.Minute),

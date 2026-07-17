@@ -1,10 +1,14 @@
 .PHONY: test build release
 
+PNPM ?= pnpm
+
 test:
 	go test ./...
+	$(PNPM) --dir web typecheck
 
 build:
-	go build ./cmd/netprobe-server ./cmd/netcheck
+	$(PNPM) --dir web build
+	go build ./cmd/netprobe-server ./cmd/netcheck ./cmd/netprobe-deploy
 
 release:
-	./scripts/release-local.sh
+	go run ./cmd/netprobe-release

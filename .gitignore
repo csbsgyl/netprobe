@@ -1,6 +1,8 @@
 .DS_Store
 .env
 .tmp/
+node_modules/
+.pnpm-store/
 bin/
 dist/
 data/

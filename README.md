@@ -1,17 +1,25 @@
 # NetProbe
 
-NetProbe 是一个可自托管的网络适配检测平台。一台公网服务器即可同时提供：
+NetProbe 是一个可自托管的网络适配检测平台。一台公网服务器、一个公网 IP 和两个 UDP 端口即可同时提供：
 
 - 浏览器快速检查：公网出口、HTTPS、WebRTC/STUN UDP 路径。
-- Windows/Linux 一键深度检测：同一 UDP socket 访问两个服务端口，检查映射稳定性、备用端口回包和连通性。
-- 统一服务端判定与 JSON 协议。
-- 交互式一键部署：校验域名 DNS、安装 Docker、启动服务，并由 Caddy 自动申请和续期 HTTPS 证书。
+- Windows/Linux 一键深度检测：同一 UDP socket 访问同一 IP 的两个服务端口，检查映射稳定性、备用端口回包、RTT 和连通性。
+- 服务端统一判定和 JSON 输出，便于自动筛选用户网络是否满足要求。
+- Go 一键部署器：检查域名 DNS、准备 Docker、生成配置、启动服务，并等待 Caddy 自动签发 HTTPS 证书。
 
-> 单公网 IP 可以判断“映射是否随目标端口变化”，不能完整区分所有 RFC 4787/5780 映射与过滤行为。界面会把结果标为 `likely`，不会伪装成权威的传统 NAT 四分类。
+> 一个 IP 足以判断映射是否随目标端口变化，也能测试来自同一 IP 备用源端口的回包。它不能完整实现需要第二公网 IP 的 RFC 5780 全部测试，因此结果使用 `likely`，不会伪装成绝对准确的传统 NAT 四分类。
 
-## 用户使用
+## 技术栈
 
-打开网页进行快速检测，或执行一条深度检测命令：
+- Go 1.22+：HTTP/UDP/STUN 服务端、Windows/Linux 检测客户端、部署器和发布工具。
+- Vue 3 + TypeScript：网页界面和浏览器检测逻辑。
+- Docker Compose、Caddyfile 和 GitHub Actions 仅作为部署配置。
+
+仓库中的 `scripts/install-server.sh` 是首次安装的极薄启动入口，只识别 Linux CPU 架构、下载并校验 Go 部署器，然后立即执行它。DNS 判断、配置生成、Docker 编排和健康检查全部由 Go 完成；仓库不再使用原生 JavaScript、独立 CSS 或其他语言实现业务功能。
+
+## 用户检测
+
+网页打开部署域名即可进行快速检测。Linux 深度检测只需：
 
 ```bash
 curl -fsSL https://check.example.com/install.sh | sh
@@ -23,7 +31,7 @@ Windows PowerShell：
 irm https://check.example.com/install.ps1 | iex
 ```
 
-脚本自动识别 CPU 架构、下载客户端、校验 SHA-256、运行检测并清理临时文件。客户端也支持自动化 JSON 输出：
+启动入口会自动识别 CPU 架构、下载客户端、验证 SHA-256、运行检测并清理临时文件。自动化系统也可直接使用 JSON：
 
 ```bash
 netcheck --server https://check.example.com --json
@@ -33,12 +41,12 @@ netcheck --server https://check.example.com --json
 
 ## 服务器一键部署
 
-要求：
+服务器要求：
 
-- 受支持的 Linux 公网服务器，建议 Ubuntu/Debian。
-- 域名已有 A 或 AAAA 记录指向该服务器。
-- 云安全组允许 `80/tcp`、`443/tcp`、`3478/udp`、`3479/udp`。
-- Root 权限。
+- 带公网 IPv4 或 IPv6 的 Linux，建议 Ubuntu/Debian。
+- 域名已有 A 或 AAAA 记录直接指向该服务器。
+- 云安全组允许 `80/tcp`、`443/tcp`、`3478/udp`、`3479/udp`；`443/udp` 用于 HTTP/3，可选。
+- Root 权限和 `curl`、`sha256sum`。Docker 缺失时会调用 Docker 官方安装器。
 
 执行：
 
@@ -46,19 +54,16 @@ netcheck --server https://check.example.com --json
 curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/install-server.sh | sudo sh
 ```
 
-安装器会询问域名，并自动完成：
-
-1. 获取服务器公网 IPv4/IPv6。
-2. 解析域名并确认至少一个地址指向本机。
-3. 安装 Docker Engine 与 Compose（缺失时）。
-4. 配置服务密钥并启动容器。
-5. Caddy 申请并自动续期 TLS 证书。
-6. 等待 HTTPS 健康检查通过后输出用户命令。
-
-无交互部署可预先传入域名：
+安装器会询问域名并自动完成 DNS 校验、Docker/Compose 检查、源码配置、容器启动和 HTTPS 健康检查。无交互部署：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/install-server.sh | sudo env DOMAIN=check.example.com sh
+```
+
+固定安装某个发布版本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/install-server.sh | sudo env NETPROBE_VERSION=v0.2.0 DOMAIN=check.example.com sh
 ```
 
 管理命令：
@@ -67,19 +72,27 @@ curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/insta
 cd /opt/netprobe
 docker compose -f deploy/compose.yaml ps
 docker compose -f deploy/compose.yaml logs -f
-docker compose -f deploy/compose.yaml up -d --build
+docker compose -f deploy/compose.yaml up -d
 ```
 
 ## 本地开发
 
-需要 Go 1.22+：
+需要 Go 1.22+、Node.js 22 和 pnpm 10：
 
 ```bash
+pnpm install --frozen-lockfile
+pnpm --dir web build
 go test ./...
+```
+
+启动后端和生产前端：
+
+```bash
 NETPROBE_SECRET=development-secret \
 NETPROBE_PUBLIC_HOST=127.0.0.1 \
 NETPROBE_HTTP_ADDR=:8080 \
 NETPROBE_UDP_PORTS=3478,3479 \
+NETPROBE_WEB_DIR=web/dist \
 go run ./cmd/netprobe-server
 ```
 
@@ -89,13 +102,15 @@ go run ./cmd/netprobe-server
 go run ./cmd/netcheck --server http://127.0.0.1:8080
 ```
 
+开发 Vue 界面时可运行 `pnpm --dir web dev`，Vite 会把检测 API、下载和一键命令入口代理到 `127.0.0.1:8080`。
+
 ## 安全边界
 
 - 深度 UDP 请求使用短期会话和 HMAC 令牌，服务端以一次性回执证明核验客户端报告。
 - 每个会话限制 UDP 请求数，响应不会大于请求，降低反射放大风险。
-- 服务端判定结果，不信任客户端自报 `PASS`。
+- 最终结论由服务端生成，不信任客户端自报 `PASS`。
 - 浏览器 STUN 只说明当前浏览器 UDP 路径可用，不等于 P2P 必然成功。
-- 检测结果随设备、VPN、网络和时间变化，不应作为永久身份属性。
+- 结果仅代表当前设备、网络、VPN 状态和测试时间，不应作为永久身份属性。
 
 ## License
 

@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -75,5 +77,52 @@ func TestInstallerUsesForwardedHTTPSHost(t *testing.T) {
 	testServer().Handler().ServeHTTP(response, request)
 	if !strings.Contains(response.Body.String(), "BASE_URL='https://check.example.com'") {
 		t.Fatalf("unexpected script: %s", response.Body.String())
+	}
+}
+
+func TestSPAFileServer(t *testing.T) {
+	webDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(webDir, "index.html"), []byte("<main>netprobe app</main>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(webDir, "assets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(webDir, "assets", "app.js"), []byte("export {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	server := testServer()
+	server.config.WebDir = webDir
+	server.http.Handler = server.routes()
+
+	rootRequest := httptest.NewRequest(http.MethodGet, "http://probe.example.com/", nil)
+	rootRequest.Header.Set("Accept", "text/html")
+	rootResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rootResponse, rootRequest)
+	if rootResponse.Code != http.StatusOK || rootResponse.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("root response = %d, cache = %q", rootResponse.Code, rootResponse.Header().Get("Cache-Control"))
+	}
+
+	pageRequest := httptest.NewRequest(http.MethodGet, "http://probe.example.com/results/latest", nil)
+	pageRequest.Header.Set("Accept", "text/html")
+	pageResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(pageResponse, pageRequest)
+	if pageResponse.Code != http.StatusOK || !strings.Contains(pageResponse.Body.String(), "netprobe app") {
+		t.Fatalf("SPA response = %d, %q", pageResponse.Code, pageResponse.Body.String())
+	}
+
+	assetRequest := httptest.NewRequest(http.MethodGet, "http://probe.example.com/assets/app.js", nil)
+	assetResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(assetResponse, assetRequest)
+	if assetResponse.Code != http.StatusOK || !strings.Contains(assetResponse.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("asset response = %d, cache = %q", assetResponse.Code, assetResponse.Header().Get("Cache-Control"))
+	}
+
+	missingRequest := httptest.NewRequest(http.MethodGet, "http://probe.example.com/assets/missing.js", nil)
+	missingResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(missingResponse, missingRequest)
+	if missingResponse.Code != http.StatusNotFound {
+		t.Fatalf("missing asset status = %d", missingResponse.Code)
 	}
 }
