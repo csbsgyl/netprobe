@@ -49,7 +49,7 @@ func ProbeUDP(ctx context.Context, session protocol.CreateSessionResponse, round
 		ctx, cancel = context.WithTimeout(ctx, defaultUDPTimeout)
 		defer cancel()
 	}
-	resolved, network, err := resolveEndpoints(ctx, session.UDPEndpoints)
+	resolved, network, err := resolveEndpoints(ctx, session.UDPEndpoints, session.PublicIP)
 	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
 		return report
@@ -250,26 +250,47 @@ func contextDeadline(ctx context.Context) time.Time {
 	return deadline
 }
 
-func resolveEndpoints(ctx context.Context, endpoints []protocol.UDPEndpoint) (map[string]*net.UDPAddr, string, error) {
+type lookupIPFunc func(context.Context, string) ([]net.IP, error)
+
+func resolveEndpoints(ctx context.Context, endpoints []protocol.UDPEndpoint, preferredIP string) (map[string]*net.UDPAddr, string, error) {
+	return resolveEndpointsWithLookup(ctx, endpoints, preferredIP, lookupIPs)
+}
+
+func resolveEndpointsWithLookup(ctx context.Context, endpoints []protocol.UDPEndpoint, preferredIP string, lookup lookupIPFunc) (map[string]*net.UDPAddr, string, error) {
 	if len(endpoints) == 0 {
 		return nil, "", fmt.Errorf("no UDP endpoints were provided")
 	}
 	allIPs := make(map[string][]net.IP, len(endpoints))
-	hasIPv4 := true
+	byHost := make(map[string][]net.IP, len(endpoints))
 	for _, endpoint := range endpoints {
-		ips, err := lookupIPs(ctx, endpoint.Host)
-		if err != nil {
-			return nil, "", fmt.Errorf("resolve UDP endpoint %s: %w", endpoint.ID, err)
+		hostKey := strings.ToLower(strings.Trim(strings.TrimSpace(endpoint.Host), "[]"))
+		ips, ok := byHost[hostKey]
+		if !ok {
+			var err error
+			ips, err = lookup(ctx, endpoint.Host)
+			if err != nil {
+				return nil, "", fmt.Errorf("resolve UDP endpoint %s: %w", endpoint.ID, err)
+			}
+			byHost[hostKey] = ips
 		}
 		allIPs[endpoint.ID] = ips
-		if firstIPv4(ips) == nil {
-			hasIPv4 = false
-		}
 	}
 
-	network := "udp6"
-	if hasIPv4 {
+	network := ""
+	if preferred := net.ParseIP(strings.Trim(strings.TrimSpace(preferredIP), "[]")); preferred != nil {
+		if preferred.To4() != nil && allEndpointsHaveFamily(endpoints, allIPs, firstIPv4) {
+			network = "udp4"
+		} else if preferred.To4() == nil && allEndpointsHaveFamily(endpoints, allIPs, firstIPv6) {
+			network = "udp6"
+		}
+	}
+	if network == "" && allEndpointsHaveFamily(endpoints, allIPs, firstIPv4) {
 		network = "udp4"
+	} else if network == "" && allEndpointsHaveFamily(endpoints, allIPs, firstIPv6) {
+		network = "udp6"
+	}
+	if network == "" {
+		return nil, "", fmt.Errorf("UDP endpoints do not share an IP address family")
 	}
 	resolved := make(map[string]*net.UDPAddr, len(endpoints))
 	for _, endpoint := range endpoints {
@@ -285,6 +306,15 @@ func resolveEndpoints(ctx context.Context, endpoints []protocol.UDPEndpoint) (ma
 		resolved[endpoint.ID] = &net.UDPAddr{IP: ip, Port: endpoint.Port}
 	}
 	return resolved, network, nil
+}
+
+func allEndpointsHaveFamily(endpoints []protocol.UDPEndpoint, allIPs map[string][]net.IP, selectIP func([]net.IP) net.IP) bool {
+	for _, endpoint := range endpoints {
+		if selectIP(allIPs[endpoint.ID]) == nil {
+			return false
+		}
+	}
+	return true
 }
 
 func lookupIPs(ctx context.Context, host string) ([]net.IP, error) {

@@ -157,7 +157,7 @@ func (s *Server) sessions(w http.ResponseWriter, request *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, protocol.CreateSessionResponse{
 		Version: protocol.Version, SessionID: session.ID, Token: session.Token,
-		ExpiresAt: session.ExpiresAt, UDPEndpoints: endpoints,
+		PublicIP: session.PublicIP, ExpiresAt: session.ExpiresAt, UDPEndpoints: endpoints,
 	})
 }
 

@@ -40,6 +40,9 @@ func TestCreateAndCompleteSession(t *testing.T) {
 	if err := json.NewDecoder(created.Body).Decode(&session); err != nil || session.Validate() != nil {
 		t.Fatalf("invalid session response: %+v, %v", session, err)
 	}
+	if session.PublicIP != "203.0.113.4" {
+		t.Fatalf("session public IP = %q", session.PublicIP)
+	}
 
 	completePayload, _ := json.Marshal(protocol.CompleteSessionRequest{Version: protocol.Version})
 	complete := httptest.NewRequest(http.MethodPost, protocol.CompleteSessionPath(session.SessionID), bytes.NewReader(completePayload))

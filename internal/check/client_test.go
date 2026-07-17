@@ -40,6 +40,7 @@ func TestClientRunEndToEnd(t *testing.T) {
 				Version:      protocol.Version,
 				SessionID:    "session-1",
 				Token:        "token-1",
+				PublicIP:     "127.0.0.1",
 				UDPEndpoints: udpServers.endpoints(),
 			})
 		case protocol.CompleteSessionPath("session-1"):

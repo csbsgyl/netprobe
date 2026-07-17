@@ -118,6 +118,33 @@ func TestValidObservationRequiresResponseEndpointSemantics(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointsPrefersSessionFamilyAndCachesHost(t *testing.T) {
+	endpoints := []protocol.UDPEndpoint{
+		{ID: "primary", Host: "probe.example.com", Port: 3478},
+		{ID: "alternate", Host: "PROBE.EXAMPLE.COM", Port: 3479},
+	}
+	lookups := 0
+	lookup := func(context.Context, string) ([]net.IP, error) {
+		lookups++
+		return []net.IP{net.ParseIP("192.0.2.10"), net.ParseIP("2001:db8::10")}, nil
+	}
+	resolved, network, err := resolveEndpointsWithLookup(context.Background(), endpoints, "2001:db8::20", lookup)
+	if err != nil {
+		t.Fatalf("resolveEndpointsWithLookup returned error: %v", err)
+	}
+	if lookups != 1 {
+		t.Fatalf("DNS lookup count = %d, want 1", lookups)
+	}
+	if network != "udp6" {
+		t.Fatalf("network = %q, want udp6", network)
+	}
+	for _, endpoint := range endpoints {
+		if got := resolved[endpoint.ID].IP.String(); got != "2001:db8::10" {
+			t.Fatalf("endpoint %s resolved to %s", endpoint.ID, got)
+		}
+	}
+}
+
 type udpTestPair struct {
 	t       *testing.T
 	ctx     context.Context

@@ -58,6 +58,7 @@ type CreateSessionResponse struct {
 	Version      int           `json:"version"`
 	SessionID    string        `json:"session_id"`
 	Token        string        `json:"token"`
+	PublicIP     string        `json:"public_ip,omitempty"`
 	ExpiresAt    time.Time     `json:"expires_at,omitempty"`
 	UDPEndpoints []UDPEndpoint `json:"udp_endpoints"`
 }
@@ -167,6 +168,9 @@ func (r CreateSessionResponse) Validate() error {
 	}
 	if strings.TrimSpace(r.Token) == "" {
 		return errors.New("token is empty")
+	}
+	if r.PublicIP != "" && net.ParseIP(strings.Trim(r.PublicIP, "[]")) == nil {
+		return errors.New("public_ip is invalid")
 	}
 	if len(r.UDPEndpoints) != 2 {
 		return errors.New("exactly two UDP endpoints are required")

@@ -7,6 +7,7 @@ func TestCreateSessionResponseValidate(t *testing.T) {
 		Version:   Version,
 		SessionID: "session-1",
 		Token:     "secret",
+		PublicIP:  "2001:db8::10",
 		UDPEndpoints: []UDPEndpoint{
 			{ID: "primary", Host: "127.0.0.1", Port: 3478},
 			{ID: "alternate", Host: "127.0.0.1", Port: 3479},
@@ -23,6 +24,7 @@ func TestCreateSessionResponseValidate(t *testing.T) {
 		{"version", func(r *CreateSessionResponse) { r.Version = 2 }},
 		{"session", func(r *CreateSessionResponse) { r.SessionID = "" }},
 		{"token", func(r *CreateSessionResponse) { r.Token = "" }},
+		{"public ip", func(r *CreateSessionResponse) { r.PublicIP = "not-an-ip" }},
 		{"one endpoint", func(r *CreateSessionResponse) { r.UDPEndpoints = r.UDPEndpoints[:1] }},
 		{"three endpoints", func(r *CreateSessionResponse) {
 			r.UDPEndpoints = append(r.UDPEndpoints, UDPEndpoint{ID: "third", Host: "127.0.0.1", Port: 3480})
