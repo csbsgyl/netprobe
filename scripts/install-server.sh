@@ -89,15 +89,15 @@ UDP_PORT_ALTERNATE=3479
 EOF
 
 cd "$INSTALL_DIR"
-docker compose pull caddy || warn "Could not pre-pull Caddy; Docker Compose will retry during startup."
-docker compose up -d --build
+docker compose -f deploy/compose.yaml pull caddy || warn "Could not pre-pull Caddy; Docker Compose will retry during startup."
+docker compose -f deploy/compose.yaml up -d --build
 
 info "Waiting for HTTPS certificate and health check..."
 attempt=0
 until curl -fsS --max-time 8 "https://$DOMAIN/healthz" >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
-    docker compose logs --tail=80 caddy netprobe >&2 || true
+    docker compose -f deploy/compose.yaml logs --tail=80 caddy netprobe >&2 || true
     fail "HTTPS did not become healthy within 5 minutes. Check that ports 80/443 are allowed by your cloud firewall."
   fi
   sleep 10

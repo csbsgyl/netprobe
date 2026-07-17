@@ -12,7 +12,7 @@ func Evaluate(session *Session, request protocol.CompleteSessionRequest) protoco
 		Version: protocol.Version, SessionID: session.ID, PublicIP: session.PublicIP,
 		Verdict: protocol.VerdictIndeterminate, MappingBehavior: "unknown", FilteringBehavior: "unknown",
 	}
-	observations := request.UDP.Observations
+	observations := verifiedObservations(session, request.UDP.Observations)
 	report.UDPReachable = len(observations) > 0
 	portsByTarget := make(map[string]map[int]struct{})
 	alternate := false
@@ -71,6 +71,22 @@ func Evaluate(session *Session, request protocol.CompleteSessionRequest) protoco
 	}
 	sort.Slice(report.Checks, func(i, j int) bool { return report.Checks[i].Name < report.Checks[j].Name })
 	return report
+}
+
+func verifiedObservations(session *Session, submitted []protocol.UDPObservation) []protocol.UDPObservation {
+	verified := make([]protocol.UDPObservation, 0, len(submitted))
+	for _, candidate := range submitted {
+		for _, recorded := range session.ServerProbes {
+			if candidate.Proof != "" && candidate.Proof == recorded.Proof && candidate.ProbeID == recorded.ProbeID &&
+				candidate.Sequence == recorded.Sequence && candidate.EndpointID == recorded.EndpointID &&
+				candidate.ResponseEndpointID == recorded.ResponseEndpointID && candidate.ResponseKind == recorded.ResponseKind &&
+				candidate.ObservedIP == recorded.ObservedIP && candidate.ObservedPort == recorded.ObservedPort {
+				verified = append(verified, candidate)
+				break
+			}
+		}
+	}
+	return verified
 }
 
 func intersect(left, right map[int]struct{}) bool {

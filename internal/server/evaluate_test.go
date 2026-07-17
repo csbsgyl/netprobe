@@ -11,11 +11,12 @@ func TestEvaluateStableMappingPasses(t *testing.T) {
 	session := &Session{ID: "test", PublicIP: "203.0.113.8", ExpiresAt: time.Now().Add(time.Minute)}
 	request := protocol.CompleteSessionRequest{Version: protocol.Version, UDP: protocol.UDPReport{
 		Observations: []protocol.UDPObservation{
-			{EndpointID: "primary", ResponseEndpointID: "primary", ResponseKind: protocol.ResponseKindDirect, ObservedPort: 42000},
-			{EndpointID: "primary", ResponseEndpointID: "alternate", ResponseKind: protocol.ResponseKindAlternate, ObservedPort: 42000},
-			{EndpointID: "alternate", ResponseEndpointID: "alternate", ResponseKind: protocol.ResponseKindDirect, ObservedPort: 42000},
+			{EndpointID: "primary", ResponseEndpointID: "primary", ResponseKind: protocol.ResponseKindDirect, ObservedPort: 42000, Proof: "one"},
+			{EndpointID: "primary", ResponseEndpointID: "alternate", ResponseKind: protocol.ResponseKindAlternate, ObservedPort: 42000, Proof: "two"},
+			{EndpointID: "alternate", ResponseEndpointID: "alternate", ResponseKind: protocol.ResponseKindDirect, ObservedPort: 42000, Proof: "three"},
 		},
 	}}
+	session.ServerProbes = append(session.ServerProbes, request.UDP.Observations...)
 	report := Evaluate(session, request)
 	if report.Verdict != protocol.VerdictPass {
 		t.Fatalf("verdict = %q, want pass", report.Verdict)

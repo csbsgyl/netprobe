@@ -91,6 +91,7 @@ type ObservationPacket struct {
 	SentAtUnixNano     int64  `json:"sent_at_unix_nano"`
 	ObservedIP         string `json:"observed_ip"`
 	ObservedPort       int    `json:"observed_port"`
+	Proof              string `json:"proof"`
 }
 
 type UDPAttempt struct {
@@ -110,6 +111,7 @@ type UDPObservation struct {
 	ObservedIP         string  `json:"observed_ip"`
 	ObservedPort       int     `json:"observed_port"`
 	RTTMilliseconds    float64 `json:"rtt_ms"`
+	Proof              string  `json:"proof"`
 }
 
 type UDPReport struct {

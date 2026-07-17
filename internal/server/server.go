@@ -144,6 +144,9 @@ func (s *Server) sessionByID(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "invalid result", http.StatusBadRequest)
 		return
 	}
+	if latest, ok := s.store.Snapshot(parts[0], bearerToken(request)); ok {
+		session = latest
+	}
 	writeJSON(w, http.StatusOK, Evaluate(session, input))
 }
 
@@ -189,7 +192,7 @@ func (s *Server) serveUDP(ctx context.Context, index int, conn *net.UDPConn) {
 		if err := json.Unmarshal(buffer[:length], &probe); err != nil || probe.Version != protocol.Version || probe.Type != protocol.PacketTypeProbe || probe.EndpointID != endpointID(index) {
 			continue
 		}
-		if _, ok := s.store.AuthorizeProbe(probe.SessionID, probe.Token, remote.IP); !ok {
+		if _, ok := s.store.AuthorizeProbe(probe.SessionID, probe.Token); !ok {
 			continue
 		}
 		s.replyUDP(index, index, protocol.ResponseKindDirect, probe, remote)
@@ -214,11 +217,16 @@ func (s *Server) rootOrAssets(assets http.Handler) http.Handler {
 }
 
 func (s *Server) replyUDP(receivedAt, respondFrom int, kind string, probe protocol.ProbePacket, remote *net.UDPAddr) {
+	proof, err := randomID(18)
+	if err != nil {
+		return
+	}
 	reply := protocol.ObservationPacket{
 		Version: protocol.Version, Type: protocol.PacketTypeObservation, SessionID: probe.SessionID,
 		EndpointID: endpointID(receivedAt), ResponseEndpointID: endpointID(respondFrom), ResponseKind: kind,
 		ProbeID: probe.ProbeID, Sequence: probe.Sequence, SentAtUnixNano: probe.SentAtUnixNano,
 		ObservedIP: remote.IP.String(), ObservedPort: remote.Port,
+		Proof: proof,
 	}
 	payload, _ := json.Marshal(reply)
 	s.mu.RLock()
@@ -228,6 +236,7 @@ func (s *Server) replyUDP(receivedAt, respondFrom int, kind string, probe protoc
 	s.store.Record(probe.SessionID, protocol.UDPObservation{
 		EndpointID: reply.EndpointID, ResponseEndpointID: reply.ResponseEndpointID, ResponseKind: reply.ResponseKind,
 		ProbeID: reply.ProbeID, Sequence: reply.Sequence, ObservedIP: reply.ObservedIP, ObservedPort: reply.ObservedPort,
+		Proof: reply.Proof,
 	})
 }
 

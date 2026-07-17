@@ -157,6 +157,7 @@ func (p *udpTestPair) respond(receivedAt, sentFrom int, kind string, probe proto
 		SentAtUnixNano:     probe.SentAtUnixNano,
 		ObservedIP:         client.IP.String(),
 		ObservedPort:       client.Port,
+		Proof:              probe.ProbeID + "-proof-" + kind,
 	}
 	payload, err := json.Marshal(packet)
 	if err != nil {

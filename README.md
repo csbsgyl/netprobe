@@ -65,9 +65,9 @@ curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/insta
 
 ```bash
 cd /opt/netprobe
-docker compose ps
-docker compose logs -f
-docker compose up -d --build
+docker compose -f deploy/compose.yaml ps
+docker compose -f deploy/compose.yaml logs -f
+docker compose -f deploy/compose.yaml up -d --build
 ```
 
 ## 本地开发
@@ -91,7 +91,7 @@ go run ./cmd/netcheck --server http://127.0.0.1:8080
 
 ## 安全边界
 
-- 深度 UDP 请求使用短期会话和 HMAC 令牌，并绑定创建会话时的公网 IP。
+- 深度 UDP 请求使用短期会话和 HMAC 令牌，服务端以一次性回执证明核验客户端报告。
 - 每个会话限制 UDP 请求数，响应不会大于请求，降低反射放大风险。
 - 服务端判定结果，不信任客户端自报 `PASS`。
 - 浏览器 STUN 只说明当前浏览器 UDP 路径可用，不等于 P2P 必然成功。

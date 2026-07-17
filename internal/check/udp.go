@@ -177,6 +177,7 @@ func ProbeUDP(ctx context.Context, session protocol.CreateSessionResponse, round
 			ObservedIP:         observation.ObservedIP,
 			ObservedPort:       observation.ObservedPort,
 			RTTMilliseconds:    rtt,
+			Proof:              observation.Proof,
 		})
 		switch observation.ResponseKind {
 		case protocol.ResponseKindDirect:
@@ -273,7 +274,7 @@ func validObservation(sessionID string, observation protocol.ObservationPacket, 
 	if observation.ResponseKind != protocol.ResponseKindDirect && observation.ResponseKind != protocol.ResponseKindAlternate {
 		return false
 	}
-	if net.ParseIP(observation.ObservedIP) == nil || observation.ObservedPort < 1 || observation.ObservedPort > 65535 {
+	if net.ParseIP(observation.ObservedIP) == nil || observation.ObservedPort < 1 || observation.ObservedPort > 65535 || observation.Proof == "" {
 		return false
 	}
 	return observation.ResponseEndpointID != ""

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -59,15 +58,11 @@ func (s *SessionStore) Valid(id, token string) (*Session, bool) {
 	return cloneSession(session), true
 }
 
-func (s *SessionStore) AuthorizeProbe(id, token string, remoteIP net.IP) (*Session, bool) {
+func (s *SessionStore) AuthorizeProbe(id, token string) (*Session, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	session, ok := s.sessions[id]
 	if !ok || time.Now().After(session.ExpiresAt) || session.ProbeCount >= 32 || !hmac.Equal([]byte(token), []byte(s.sign(id, session.ExpiresAt))) {
-		return nil, false
-	}
-	expected := net.ParseIP(session.PublicIP)
-	if expected == nil || !expected.Equal(remoteIP) {
 		return nil, false
 	}
 	session.ProbeCount++
@@ -80,6 +75,10 @@ func (s *SessionStore) Record(id string, observation protocol.UDPObservation) {
 	if session, ok := s.sessions[id]; ok && time.Now().Before(session.ExpiresAt) {
 		session.ServerProbes = append(session.ServerProbes, observation)
 	}
+}
+
+func (s *SessionStore) Snapshot(id, token string) (*Session, bool) {
+	return s.Valid(id, token)
 }
 
 func (s *SessionStore) sign(id string, expires time.Time) string {
