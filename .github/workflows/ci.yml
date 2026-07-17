@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
       - run: go test -race ./...
       - run: go vet ./...
       - run: GOOS=windows GOARCH=amd64 go build ./cmd/netcheck

@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
       - name: Build clients
         run: VERSION=${GITHUB_REF_NAME:-dev} ./scripts/release-local.sh
       - name: Upload GitHub release assets
