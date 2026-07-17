@@ -76,6 +76,11 @@ func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/api/v1/browser-check", s.browserCheck)
+	// Protocol v1 did not authenticate UDP observations with response proofs.
+	// Keep its retired paths out of the SPA fallback so old clients fail with a
+	// clear 404 instead of receiving an unrelated HTML or method response.
+	mux.Handle("/api/v1/sessions", http.NotFoundHandler())
+	mux.Handle("/api/v1/sessions/", http.NotFoundHandler())
 	mux.HandleFunc(protocol.CreateSessionPath, s.sessions)
 	mux.HandleFunc(protocol.CreateSessionPath+"/", s.sessionByID)
 	mux.HandleFunc("/install.sh", s.installShell)
@@ -142,8 +147,12 @@ func (s *Server) sessions(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	var input protocol.CreateSessionRequest
-	if err := decodeJSON(request, &input); err != nil || input.Version != protocol.Version {
+	if err := decodeJSON(request, &input); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	if input.Version != protocol.Version {
+		writeProtocolVersionError(w, input.Version)
 		return
 	}
 	session, err := s.store.Create(clientIP(request), input.Client)
@@ -174,8 +183,12 @@ func (s *Server) sessionByID(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	var input protocol.CompleteSessionRequest
-	if err := decodeJSON(request, &input); err != nil || input.Version != protocol.Version {
+	if err := decodeJSON(request, &input); err != nil {
 		http.Error(w, "invalid result", http.StatusBadRequest)
+		return
+	}
+	if input.Version != protocol.Version {
+		writeProtocolVersionError(w, input.Version)
 		return
 	}
 	if latest, ok := s.store.Snapshot(parts[0], bearerToken(request)); ok {
@@ -293,6 +306,13 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeProtocolVersionError(w http.ResponseWriter, received int) {
+	writeJSON(w, http.StatusBadRequest, protocol.ErrorResponse{Error: protocol.APIError{
+		Code:    "unsupported_protocol_version",
+		Message: fmt.Sprintf("protocol version %d is unsupported; expected %d", received, protocol.Version),
+	}})
 }
 
 func bearerToken(request *http.Request) string {

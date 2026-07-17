@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -110,5 +111,26 @@ func TestNewClientValidation(t *testing.T) {
 	}
 	if _, err := NewClient("probe.example.com"); err != nil {
 		t.Fatalf("hostname-only server rejected: %v", err)
+	}
+}
+
+func TestClientDoesNotFallBackToProoflessV1SessionAPI(t *testing.T) {
+	var requestedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestedPath = request.URL.Path
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.CreateSession(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "404 Not Found") {
+		t.Fatalf("CreateSession error = %v, want explicit 404", err)
+	}
+	if requestedPath != "/api/v2/sessions" {
+		t.Fatalf("create-session request path = %q, want /api/v2/sessions", requestedPath)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
@@ -107,7 +108,8 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
-	opts := options{server: defaultServer, json: jsonModeRequested(args), timeout: 10 * time.Second}
+	requestedJSON := jsonModeRequested(args)
+	opts := options{server: defaultServer, json: requestedJSON, timeout: 10 * time.Second}
 	flags := flag.NewFlagSet("netcheck", flag.ContinueOnError)
 	flagOutput := stderr
 	if opts.json {
@@ -123,6 +125,9 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		fmt.Fprintln(flagOutput, "Exit codes: 0 pass, 1 fail, 2 usage, 3 runtime error, 4 indeterminate.")
 	}
 	if err := flags.Parse(args); err != nil {
+		// Parse may stop after mutating opts.json. Keep the output mode selected
+		// from the complete argument list so flag diagnostics never mix formats.
+		opts.json = requestedJSON
 		if errors.Is(err, flag.ErrHelp) {
 			return opts, err
 		}
@@ -144,11 +149,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 func jsonModeRequested(args []string) bool {
 	requested := false
 	for _, arg := range args {
-		switch arg {
-		case "--json", "--json=true", "--json=1", "--json=t", "--json=T", "--json=TRUE", "--json=True":
+		if arg == "--" {
+			break
+		}
+		switch {
+		case arg == "--json" || arg == "-json":
 			requested = true
-		case "--json=false", "--json=0", "--json=f", "--json=F", "--json=FALSE", "--json=False":
-			requested = false
+		case strings.HasPrefix(arg, "--json=") || strings.HasPrefix(arg, "-json="):
+			if value, err := strconv.ParseBool(strings.SplitN(arg, "=", 2)[1]); err == nil {
+				requested = value
+			}
 		}
 	}
 	return requested

@@ -21,7 +21,7 @@ func TestCreateSessionResponseValidate(t *testing.T) {
 		name   string
 		mutate func(*CreateSessionResponse)
 	}{
-		{"version", func(r *CreateSessionResponse) { r.Version = 2 }},
+		{"version", func(r *CreateSessionResponse) { r.Version = Version - 1 }},
 		{"session", func(r *CreateSessionResponse) { r.SessionID = "" }},
 		{"token", func(r *CreateSessionResponse) { r.Token = "" }},
 		{"public ip", func(r *CreateSessionResponse) { r.PublicIP = "not-an-ip" }},
@@ -42,6 +42,15 @@ func TestCreateSessionResponseValidate(t *testing.T) {
 				t.Fatal("expected validation error")
 			}
 		})
+	}
+}
+
+func TestProofProtocolUsesVersionedV2SessionPath(t *testing.T) {
+	if Version != 2 {
+		t.Fatalf("protocol version = %d, want 2", Version)
+	}
+	if CreateSessionPath != "/api/v2/sessions" {
+		t.Fatalf("create-session path = %q, want /api/v2/sessions", CreateSessionPath)
 	}
 }
 

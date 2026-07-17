@@ -59,6 +59,38 @@ func TestCreateAndCompleteSession(t *testing.T) {
 	}
 }
 
+func TestSessionProtocolV2RejectsLegacyTrafficExplicitly(t *testing.T) {
+	server := testServer()
+
+	legacyPath := httptest.NewRequest(http.MethodPost, "/api/v1/sessions", strings.NewReader(`{"version":1}`))
+	legacyResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(legacyResponse, legacyPath)
+	if legacyResponse.Code != http.StatusNotFound {
+		t.Fatalf("legacy session path status = %d, want 404", legacyResponse.Code)
+	}
+
+	legacyVersion := httptest.NewRequest(http.MethodPost, protocol.CreateSessionPath, strings.NewReader(`{"version":1,"client":{"name":"v0.1"}}`))
+	versionResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(versionResponse, legacyVersion)
+	if versionResponse.Code != http.StatusBadRequest {
+		t.Fatalf("legacy protocol status = %d, want 400", versionResponse.Code)
+	}
+	var apiError protocol.ErrorResponse
+	if err := json.NewDecoder(versionResponse.Body).Decode(&apiError); err != nil {
+		t.Fatalf("decode version error: %v", err)
+	}
+	if apiError.Error.Code != "unsupported_protocol_version" || !strings.Contains(apiError.Error.Message, "expected 2") {
+		t.Fatalf("unexpected version error: %+v", apiError)
+	}
+
+	browser := httptest.NewRequest(http.MethodGet, "/api/v1/browser-check", nil)
+	browserResponse := httptest.NewRecorder()
+	server.Handler().ServeHTTP(browserResponse, browser)
+	if browserResponse.Code != http.StatusOK {
+		t.Fatalf("v1 browser-check status = %d, want 200", browserResponse.Code)
+	}
+}
+
 func TestCurlRootGetsPlainText(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "http://probe.example.com/", nil)
 	request.Header.Set("User-Agent", "curl/8.0")

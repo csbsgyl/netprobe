@@ -12,9 +12,12 @@ import (
 
 const (
 	// Version is the current HTTP and UDP protocol version.
-	Version = 1
+	//
+	// Version 2 requires an unpredictable proof in every UDP observation. It is
+	// intentionally incompatible with the proof-less protocol shipped in v0.1.
+	Version = 2
 
-	CreateSessionPath = "/api/v1/sessions"
+	CreateSessionPath = "/api/v2/sessions"
 
 	PacketTypeProbe       = "probe"
 	PacketTypeObservation = "observation"
@@ -92,7 +95,7 @@ type ObservationPacket struct {
 	SentAtUnixNano     int64  `json:"sent_at_unix_nano"`
 	ObservedIP         string `json:"observed_ip"`
 	ObservedPort       int    `json:"observed_port"`
-	Proof              string `json:"proof"`
+	Proof              string `json:"proof"` // Required since protocol v2.
 }
 
 type UDPAttempt struct {

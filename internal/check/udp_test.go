@@ -27,6 +27,10 @@ func TestProbeUDPUsesOneSocketAndCollectsAlternateResponses(t *testing.T) {
 	if len(report.Attempts) != 2 {
 		t.Fatalf("attempt count = %d, want 2; errors: %v", len(report.Attempts), report.Errors)
 	}
+	if !report.Attempts[0].AlternateAsked || report.Attempts[1].AlternateAsked {
+		t.Fatalf("alternate callback requests = [%t, %t], want [true, false]",
+			report.Attempts[0].AlternateAsked, report.Attempts[1].AlternateAsked)
+	}
 	if len(report.Observations) < 3 {
 		t.Fatalf("observation count = %d, want at least 3; errors: %v", len(report.Observations), report.Errors)
 	}
@@ -115,6 +119,32 @@ func TestValidObservationRequiresResponseEndpointSemantics(t *testing.T) {
 	observation.ResponseEndpointID = "primary"
 	if validObservation("session-1", observation, probe, alternates) {
 		t.Fatal("alternate observation from receiving endpoint accepted")
+	}
+}
+
+func TestValidObservationRejectsIncompatibleVersionAndMissingProof(t *testing.T) {
+	probeTime := time.Now()
+	probe := sentProbe{endpointID: "primary", sequence: 1, sentAt: probeTime}
+	observation := protocol.ObservationPacket{
+		Version:            protocol.Version,
+		Type:               protocol.PacketTypeObservation,
+		SessionID:          "session-1",
+		EndpointID:         "primary",
+		ResponseEndpointID: "primary",
+		ResponseKind:       protocol.ResponseKindDirect,
+		ProbeID:            "probe-1",
+		Sequence:           1,
+		SentAtUnixNano:     probeTime.UnixNano(),
+		ObservedIP:         "203.0.113.1",
+		ObservedPort:       12345,
+	}
+	if validObservation("session-1", observation, probe, map[string]string{"primary": "alternate"}) {
+		t.Fatal("proof-less protocol v2 observation was accepted")
+	}
+	observation.Version = protocol.Version - 1
+	observation.Proof = "legacy-proof"
+	if validObservation("session-1", observation, probe, map[string]string{"primary": "alternate"}) {
+		t.Fatal("protocol v1 observation was accepted by the v2 client")
 	}
 }
 

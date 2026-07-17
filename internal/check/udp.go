@@ -120,13 +120,13 @@ type udpState struct {
 	report     *protocol.UDPReport
 }
 
-func (s *udpState) runPhase(ctx context.Context, conn *net.UDPConn, endpoint protocol.UDPEndpoint, rounds int, deadline time.Time, allowAlternate bool, complete func() bool) {
+func (s *udpState) runPhase(ctx context.Context, conn *net.UDPConn, endpoint protocol.UDPEndpoint, rounds int, deadline time.Time, requestAlternate bool, complete func() bool) {
 	nextSend := time.Now()
 	sends := 0
 	for ctx.Err() == nil && (sends < rounds || !complete()) && time.Now().Before(deadline) {
 		now := time.Now()
 		if sends < rounds && !now.Before(nextSend) {
-			s.sendProbe(conn, endpoint)
+			s.sendProbe(conn, endpoint, requestAlternate)
 			sends++
 			nextSend = now.Add(probeInterval)
 			continue
@@ -154,11 +154,11 @@ func (s *udpState) runPhase(ctx context.Context, conn *net.UDPConn, endpoint pro
 			s.report.Errors = append(s.report.Errors, "read UDP response: "+err.Error())
 			return
 		}
-		s.collect(s.buffer[:n], source, allowAlternate)
+		s.collect(s.buffer[:n], source, requestAlternate)
 	}
 }
 
-func (s *udpState) sendProbe(conn *net.UDPConn, endpoint protocol.UDPEndpoint) {
+func (s *udpState) sendProbe(conn *net.UDPConn, endpoint protocol.UDPEndpoint, requestAlternate bool) {
 	probeID, err := randomProbeID()
 	if err != nil {
 		s.report.Errors = append(s.report.Errors, "generate probe id: "+err.Error())
@@ -171,7 +171,7 @@ func (s *udpState) sendProbe(conn *net.UDPConn, endpoint protocol.UDPEndpoint) {
 		ProbeID:        probeID,
 		Sequence:       sequence,
 		SentAtUnixNano: now.UnixNano(),
-		AlternateAsked: true,
+		AlternateAsked: requestAlternate,
 	}
 	s.report.Attempts = append(s.report.Attempts, attempt)
 	packet := protocol.ProbePacket{
@@ -183,7 +183,7 @@ func (s *udpState) sendProbe(conn *net.UDPConn, endpoint protocol.UDPEndpoint) {
 		ProbeID:          probeID,
 		Sequence:         sequence,
 		SentAtUnixNano:   attempt.SentAtUnixNano,
-		RequestAlternate: true,
+		RequestAlternate: requestAlternate,
 	}
 	payload, err := json.Marshal(packet)
 	if err != nil {

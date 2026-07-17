@@ -85,3 +85,30 @@ func TestRunFlagErrorAsJSON(t *testing.T) {
 		t.Fatalf("stderr is not a strict JSON flag error: %q", stderr.String())
 	}
 }
+
+func TestRunFlagErrorUsesOneRequestedFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantJSON bool
+	}{
+		{name: "single dash json", args: []string{"--unknown", "-json"}, wantJSON: true},
+		{name: "later json false", args: []string{"--json", "--unknown", "--json=false"}, wantJSON: false},
+		{name: "invalid duration as json", args: []string{"--timeout", "invalid", "--json"}, wantJSON: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), test.args, &stdout, &stderr); code != exitUsage {
+				t.Fatalf("exit code = %d, want %d", code, exitUsage)
+			}
+			isJSON := strings.HasPrefix(stderr.String(), `{"error":`)
+			if isJSON != test.wantJSON {
+				t.Fatalf("stderr format JSON = %t, want %t: %q", isJSON, test.wantJSON, stderr.String())
+			}
+			if test.wantJSON && strings.Contains(stderr.String(), "Usage:") {
+				t.Fatalf("JSON error contains text usage: %q", stderr.String())
+			}
+		})
+	}
+}

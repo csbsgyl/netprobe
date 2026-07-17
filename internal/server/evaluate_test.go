@@ -32,3 +32,21 @@ func TestEvaluateNoUDPFail(t *testing.T) {
 		t.Fatalf("unexpected report: %+v", report)
 	}
 }
+
+func TestEvaluateRejectsMissingOrMismatchedProof(t *testing.T) {
+	recorded := protocol.UDPObservation{
+		EndpointID: "primary", ResponseEndpointID: "primary", ResponseKind: protocol.ResponseKindDirect,
+		ProbeID: "probe-1", Sequence: 1, ObservedIP: "203.0.113.8", ObservedPort: 42000, Proof: "server-proof",
+	}
+	session := &Session{ID: "test", PublicIP: "203.0.113.8", ServerProbes: []protocol.UDPObservation{recorded}}
+	for _, proof := range []string{"", "different-proof"} {
+		candidate := recorded
+		candidate.Proof = proof
+		report := Evaluate(session, protocol.CompleteSessionRequest{Version: protocol.Version, UDP: protocol.UDPReport{
+			Observations: []protocol.UDPObservation{candidate},
+		}})
+		if report.Verdict != protocol.VerdictFail || report.UDPReachable {
+			t.Fatalf("proof %q produced an authenticated UDP result: %+v", proof, report)
+		}
+	}
+}
