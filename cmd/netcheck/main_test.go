@@ -56,4 +56,32 @@ func TestRunUsageError(t *testing.T) {
 	if exitCode != exitUsage {
 		t.Fatalf("exit code = %d, want %d", exitCode, exitUsage)
 	}
+	if !strings.Contains(stderr.String(), "--timeout must be at least 1s") {
+		t.Fatalf("stderr does not contain validation error: %q", stderr.String())
+	}
+}
+
+func TestRunUsageErrorAsJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{"--json", "--timeout", "0s"}, &stdout, &stderr)
+	if exitCode != exitUsage {
+		t.Fatalf("exit code = %d, want %d", exitCode, exitUsage)
+	}
+	if !strings.Contains(stderr.String(), `"code":"invalid_configuration"`) ||
+		!strings.Contains(stderr.String(), `"message":"--timeout must be at least 1s"`) {
+		t.Fatalf("stderr is not a structured validation error: %q", stderr.String())
+	}
+}
+
+func TestRunFlagErrorAsJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	exitCode := run(context.Background(), []string{"--unknown", "--json"}, &stdout, &stderr)
+	if exitCode != exitUsage {
+		t.Fatalf("exit code = %d, want %d", exitCode, exitUsage)
+	}
+	if !strings.HasPrefix(stderr.String(), `{"error":`) ||
+		!strings.Contains(stderr.String(), `"code":"invalid_configuration"`) ||
+		strings.Contains(stderr.String(), "Usage:") {
+		t.Fatalf("stderr is not a strict JSON flag error: %q", stderr.String())
+	}
 }

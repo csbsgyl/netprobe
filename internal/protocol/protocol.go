@@ -168,8 +168,8 @@ func (r CreateSessionResponse) Validate() error {
 	if strings.TrimSpace(r.Token) == "" {
 		return errors.New("token is empty")
 	}
-	if len(r.UDPEndpoints) < 2 {
-		return errors.New("at least two UDP endpoints are required")
+	if len(r.UDPEndpoints) != 2 {
+		return errors.New("exactly two UDP endpoints are required")
 	}
 	ids := make(map[string]struct{}, len(r.UDPEndpoints))
 	addresses := make(map[string]struct{}, len(r.UDPEndpoints))

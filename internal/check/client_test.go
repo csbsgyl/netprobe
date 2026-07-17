@@ -50,7 +50,7 @@ func TestClientRunEndToEnd(t *testing.T) {
 			if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
 				t.Errorf("decode completion request: %v", err)
 			}
-			if input.Version != protocol.Version || len(input.UDP.Observations) < 4 {
+			if input.Version != protocol.Version || len(input.UDP.Observations) < 3 {
 				t.Errorf("unexpected completion request: %+v", input)
 			}
 			mu.Lock()

@@ -15,7 +15,6 @@ import (
 
 const (
 	probeInterval   = 75 * time.Millisecond
-	readInterval    = 200 * time.Millisecond
 	maxDatagramSize = 4096
 )
 
@@ -41,6 +40,15 @@ func ProbeUDP(ctx context.Context, session protocol.CreateSessionResponse, round
 	if rounds < 1 {
 		rounds = 1
 	}
+	if len(session.UDPEndpoints) != 2 {
+		report.Errors = append(report.Errors, "exactly two UDP endpoints are required")
+		return report
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultUDPTimeout)
+		defer cancel()
+	}
 	resolved, network, err := resolveEndpoints(ctx, session.UDPEndpoints)
 	if err != nil {
 		report.Errors = append(report.Errors, err.Error())
@@ -60,132 +68,186 @@ func ProbeUDP(ctx context.Context, session protocol.CreateSessionResponse, round
 	defer conn.Close()
 
 	sent := make(map[string]sentProbe, len(resolved)*rounds)
-	for round := 0; round < rounds; round++ {
-		for _, endpoint := range session.UDPEndpoints {
-			select {
-			case <-ctx.Done():
-				report.Errors = appendContextError(report.Errors, ctx.Err())
-				return report
-			default:
-			}
-
-			probeID, err := randomProbeID()
-			if err != nil {
-				report.Errors = append(report.Errors, "generate probe id: "+err.Error())
-				return report
-			}
-			now := time.Now()
-			sequence := uint64(len(report.Attempts) + 1)
-			attempt := protocol.UDPAttempt{
-				EndpointID:     endpoint.ID,
-				ProbeID:        probeID,
-				Sequence:       sequence,
-				SentAtUnixNano: now.UnixNano(),
-				AlternateAsked: true,
-			}
-			report.Attempts = append(report.Attempts, attempt)
-			packet := protocol.ProbePacket{
-				Version:          protocol.Version,
-				Type:             protocol.PacketTypeProbe,
-				SessionID:        session.SessionID,
-				Token:            session.Token,
-				EndpointID:       endpoint.ID,
-				ProbeID:          probeID,
-				Sequence:         sequence,
-				SentAtUnixNano:   attempt.SentAtUnixNano,
-				RequestAlternate: true,
-			}
-			payload, err := json.Marshal(packet)
-			if err != nil {
-				report.Errors = append(report.Errors, fmt.Sprintf("encode probe for %s: %v", endpoint.ID, err))
-				continue
-			}
-			if _, err := conn.WriteToUDP(payload, resolved[endpoint.ID]); err != nil {
-				report.Errors = append(report.Errors, fmt.Sprintf("send probe to %s: %v", endpoint.ID, err))
-				continue
-			}
-			sent[probeID] = sentProbe{endpointID: endpoint.ID, sequence: sequence, sentAt: now}
-		}
-		if round+1 < rounds {
-			timer := time.NewTimer(probeInterval)
-			select {
-			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
-				report.Errors = appendContextError(report.Errors, ctx.Err())
-				return report
-			case <-timer.C:
-			}
-		}
-	}
-
 	seen := make(map[string]struct{})
 	direct := make(map[string]bool)
 	alternate := make(map[string]bool)
 	buffer := make([]byte, maxDatagramSize)
-	for {
-		if allResponseKindsSeen(session.UDPEndpoints, direct, alternate) {
-			return report
+	alternates := map[string]string{
+		session.UDPEndpoints[0].ID: session.UDPEndpoints[1].ID,
+		session.UDPEndpoints[1].ID: session.UDPEndpoints[0].ID,
+	}
+	state := udpState{
+		session:    session,
+		resolved:   resolved,
+		sent:       sent,
+		seen:       seen,
+		direct:     direct,
+		alternate:  alternate,
+		alternates: alternates,
+		buffer:     buffer,
+		report:     &report,
+	}
+
+	// The filtering phase contacts only the primary endpoint. An alternate
+	// response received here therefore reflects unsolicited source-port
+	// filtering rather than a mapping opened by a prior probe to that port.
+	primary := session.UDPEndpoints[0]
+	firstDeadline := splitDeadline(ctx)
+	state.runPhase(ctx, conn, primary, rounds, firstDeadline, true, func() bool {
+		return direct[primary.ID] && alternate[primary.ID]
+	})
+
+	// Once the alternate endpoint has been contacted, alternate responses are
+	// no longer valid filtering evidence. Only direct responses are collected
+	// in this mapping phase.
+	secondary := session.UDPEndpoints[1]
+	state.runPhase(ctx, conn, secondary, rounds, contextDeadline(ctx), false, func() bool {
+		return direct[secondary.ID]
+	})
+	report.Errors = appendContextError(report.Errors, ctx.Err())
+	return report
+}
+
+type udpState struct {
+	session    protocol.CreateSessionResponse
+	resolved   map[string]*net.UDPAddr
+	sent       map[string]sentProbe
+	seen       map[string]struct{}
+	direct     map[string]bool
+	alternate  map[string]bool
+	alternates map[string]string
+	buffer     []byte
+	report     *protocol.UDPReport
+}
+
+func (s *udpState) runPhase(ctx context.Context, conn *net.UDPConn, endpoint protocol.UDPEndpoint, rounds int, deadline time.Time, allowAlternate bool, complete func() bool) {
+	nextSend := time.Now()
+	sends := 0
+	for ctx.Err() == nil && (sends < rounds || !complete()) && time.Now().Before(deadline) {
+		now := time.Now()
+		if sends < rounds && !now.Before(nextSend) {
+			s.sendProbe(conn, endpoint)
+			sends++
+			nextSend = now.Add(probeInterval)
+			continue
 		}
-		deadline := time.Now().Add(readInterval)
-		if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
-			deadline = contextDeadline
+
+		readDeadline := deadline
+		if sends < rounds && nextSend.Before(readDeadline) {
+			readDeadline = nextSend
 		}
-		if err := conn.SetReadDeadline(deadline); err != nil {
-			report.Errors = append(report.Errors, "set UDP deadline: "+err.Error())
-			return report
+		if pollDeadline := time.Now().Add(200 * time.Millisecond); pollDeadline.Before(readDeadline) {
+			readDeadline = pollDeadline
 		}
-		n, source, err := conn.ReadFromUDP(buffer)
+		if err := conn.SetReadDeadline(readDeadline); err != nil {
+			s.report.Errors = append(s.report.Errors, "set UDP deadline: "+err.Error())
+			return
+		}
+		n, source, err := conn.ReadFromUDP(s.buffer)
 		if err != nil {
 			if ctx.Err() != nil {
-				return report
+				return
 			}
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			report.Errors = append(report.Errors, "read UDP response: "+err.Error())
-			return report
+			s.report.Errors = append(s.report.Errors, "read UDP response: "+err.Error())
+			return
 		}
-		var observation protocol.ObservationPacket
-		if err := json.Unmarshal(buffer[:n], &observation); err != nil {
-			continue
-		}
-		probe, ok := sent[observation.ProbeID]
-		if !ok || !validObservation(session.SessionID, observation, probe) {
-			continue
-		}
-		expectedSource, ok := resolved[observation.ResponseEndpointID]
-		if !ok || source.Port != expectedSource.Port || !source.IP.Equal(expectedSource.IP) {
-			continue
-		}
-		key := observation.ProbeID + "\x00" + observation.ResponseEndpointID + "\x00" + observation.ResponseKind
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		rtt := time.Since(probe.sentAt).Seconds() * 1000
-		if rtt < 0 {
-			rtt = 0
-		}
-		report.Observations = append(report.Observations, protocol.UDPObservation{
-			EndpointID:         observation.EndpointID,
-			ResponseEndpointID: observation.ResponseEndpointID,
-			ResponseKind:       observation.ResponseKind,
-			ProbeID:            observation.ProbeID,
-			Sequence:           observation.Sequence,
-			ObservedIP:         observation.ObservedIP,
-			ObservedPort:       observation.ObservedPort,
-			RTTMilliseconds:    rtt,
-			Proof:              observation.Proof,
-		})
-		switch observation.ResponseKind {
-		case protocol.ResponseKindDirect:
-			direct[observation.EndpointID] = true
-		case protocol.ResponseKindAlternate:
-			alternate[observation.EndpointID] = true
-		}
+		s.collect(s.buffer[:n], source, allowAlternate)
 	}
+}
+
+func (s *udpState) sendProbe(conn *net.UDPConn, endpoint protocol.UDPEndpoint) {
+	probeID, err := randomProbeID()
+	if err != nil {
+		s.report.Errors = append(s.report.Errors, "generate probe id: "+err.Error())
+		return
+	}
+	now := time.Now()
+	sequence := uint64(len(s.report.Attempts) + 1)
+	attempt := protocol.UDPAttempt{
+		EndpointID:     endpoint.ID,
+		ProbeID:        probeID,
+		Sequence:       sequence,
+		SentAtUnixNano: now.UnixNano(),
+		AlternateAsked: true,
+	}
+	s.report.Attempts = append(s.report.Attempts, attempt)
+	packet := protocol.ProbePacket{
+		Version:          protocol.Version,
+		Type:             protocol.PacketTypeProbe,
+		SessionID:        s.session.SessionID,
+		Token:            s.session.Token,
+		EndpointID:       endpoint.ID,
+		ProbeID:          probeID,
+		Sequence:         sequence,
+		SentAtUnixNano:   attempt.SentAtUnixNano,
+		RequestAlternate: true,
+	}
+	payload, err := json.Marshal(packet)
+	if err != nil {
+		s.report.Errors = append(s.report.Errors, fmt.Sprintf("encode probe for %s: %v", endpoint.ID, err))
+		return
+	}
+	if _, err := conn.WriteToUDP(payload, s.resolved[endpoint.ID]); err != nil {
+		s.report.Errors = append(s.report.Errors, fmt.Sprintf("send probe to %s: %v", endpoint.ID, err))
+		return
+	}
+	s.sent[probeID] = sentProbe{endpointID: endpoint.ID, sequence: sequence, sentAt: now}
+}
+
+func (s *udpState) collect(payload []byte, source *net.UDPAddr, allowAlternate bool) {
+	var observation protocol.ObservationPacket
+	if err := json.Unmarshal(payload, &observation); err != nil {
+		return
+	}
+	probe, ok := s.sent[observation.ProbeID]
+	if !ok || !validObservation(s.session.SessionID, observation, probe, s.alternates) {
+		return
+	}
+	if observation.ResponseKind == protocol.ResponseKindAlternate && !allowAlternate {
+		return
+	}
+	expectedSource, ok := s.resolved[observation.ResponseEndpointID]
+	if !ok || source.Port != expectedSource.Port || !source.IP.Equal(expectedSource.IP) {
+		return
+	}
+	key := observation.ProbeID + "\x00" + observation.ResponseEndpointID + "\x00" + observation.ResponseKind
+	if _, ok := s.seen[key]; ok {
+		return
+	}
+	s.seen[key] = struct{}{}
+	rtt := time.Since(probe.sentAt).Seconds() * 1000
+	if rtt < 0 {
+		rtt = 0
+	}
+	s.report.Observations = append(s.report.Observations, protocol.UDPObservation{
+		EndpointID:         observation.EndpointID,
+		ResponseEndpointID: observation.ResponseEndpointID,
+		ResponseKind:       observation.ResponseKind,
+		ProbeID:            observation.ProbeID,
+		Sequence:           observation.Sequence,
+		ObservedIP:         observation.ObservedIP,
+		ObservedPort:       observation.ObservedPort,
+		RTTMilliseconds:    rtt,
+		Proof:              observation.Proof,
+	})
+	if observation.ResponseKind == protocol.ResponseKindDirect {
+		s.direct[observation.EndpointID] = true
+	} else {
+		s.alternate[observation.EndpointID] = true
+	}
+}
+
+func splitDeadline(ctx context.Context) time.Time {
+	deadline := contextDeadline(ctx)
+	return time.Now().Add(time.Until(deadline) / 2)
+}
+
+func contextDeadline(ctx context.Context) time.Time {
+	deadline, _ := ctx.Deadline()
+	return deadline
 }
 
 func resolveEndpoints(ctx context.Context, endpoints []protocol.UDPEndpoint) (map[string]*net.UDPAddr, string, error) {
@@ -261,7 +323,7 @@ func firstIPv6(ips []net.IP) net.IP {
 	return nil
 }
 
-func validObservation(sessionID string, observation protocol.ObservationPacket, probe sentProbe) bool {
+func validObservation(sessionID string, observation protocol.ObservationPacket, probe sentProbe, alternates map[string]string) bool {
 	if observation.Version != protocol.Version || observation.Type != protocol.PacketTypeObservation {
 		return false
 	}
@@ -271,22 +333,17 @@ func validObservation(sessionID string, observation protocol.ObservationPacket, 
 	if observation.Sequence != probe.sequence || observation.SentAtUnixNano != probe.sentAt.UnixNano() {
 		return false
 	}
-	if observation.ResponseKind != protocol.ResponseKindDirect && observation.ResponseKind != protocol.ResponseKindAlternate {
-		return false
-	}
 	if net.ParseIP(observation.ObservedIP) == nil || observation.ObservedPort < 1 || observation.ObservedPort > 65535 || observation.Proof == "" {
 		return false
 	}
-	return observation.ResponseEndpointID != ""
-}
-
-func allResponseKindsSeen(endpoints []protocol.UDPEndpoint, direct, alternate map[string]bool) bool {
-	for _, endpoint := range endpoints {
-		if !direct[endpoint.ID] || !alternate[endpoint.ID] {
-			return false
-		}
+	switch observation.ResponseKind {
+	case protocol.ResponseKindDirect:
+		return observation.ResponseEndpointID == observation.EndpointID
+	case protocol.ResponseKindAlternate:
+		return observation.ResponseEndpointID == alternates[observation.EndpointID]
+	default:
+		return false
 	}
-	return len(endpoints) > 0
 }
 
 func randomProbeID() (string, error) {

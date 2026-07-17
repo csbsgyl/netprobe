@@ -24,6 +24,9 @@ func TestCreateSessionResponseValidate(t *testing.T) {
 		{"session", func(r *CreateSessionResponse) { r.SessionID = "" }},
 		{"token", func(r *CreateSessionResponse) { r.Token = "" }},
 		{"one endpoint", func(r *CreateSessionResponse) { r.UDPEndpoints = r.UDPEndpoints[:1] }},
+		{"three endpoints", func(r *CreateSessionResponse) {
+			r.UDPEndpoints = append(r.UDPEndpoints, UDPEndpoint{ID: "third", Host: "127.0.0.1", Port: 3480})
+		}},
 		{"duplicate id", func(r *CreateSessionResponse) { r.UDPEndpoints[1].ID = "primary" }},
 		{"duplicate address", func(r *CreateSessionResponse) { r.UDPEndpoints[1].Port = 3478 }},
 		{"bad port", func(r *CreateSessionResponse) { r.UDPEndpoints[1].Port = 70000 }},

@@ -38,6 +38,8 @@ type options struct {
 	timeout time.Duration
 }
 
+var errFlagParsing = errors.New("flag parsing failed")
+
 type errorOutput struct {
 	Error protocol.APIError `json:"error"`
 }
@@ -53,6 +55,9 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return exitPass
+		}
+		if !errors.Is(err, errFlagParsing) || opts.json {
+			writeError(stderr, opts.json, "invalid_configuration", err)
 		}
 		return exitUsage
 	}
@@ -102,19 +107,26 @@ func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
-	opts := options{server: defaultServer, timeout: 10 * time.Second}
+	opts := options{server: defaultServer, json: jsonModeRequested(args), timeout: 10 * time.Second}
 	flags := flag.NewFlagSet("netcheck", flag.ContinueOnError)
-	flags.SetOutput(stderr)
+	flagOutput := stderr
+	if opts.json {
+		flagOutput = io.Discard
+	}
+	flags.SetOutput(flagOutput)
 	flags.StringVar(&opts.server, "server", opts.server, "netprobe server URL")
 	flags.BoolVar(&opts.json, "json", false, "write the result as JSON")
 	flags.DurationVar(&opts.timeout, "timeout", opts.timeout, "overall timeout (for example 10s)")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: netcheck [--server URL] [--json] [--timeout DURATION]")
-		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Exit codes: 0 pass, 1 fail, 2 usage, 3 runtime error, 4 indeterminate.")
+		fmt.Fprintln(flagOutput, "Usage: netcheck [--server URL] [--json] [--timeout DURATION]")
+		fmt.Fprintln(flagOutput)
+		fmt.Fprintln(flagOutput, "Exit codes: 0 pass, 1 fail, 2 usage, 3 runtime error, 4 indeterminate.")
 	}
 	if err := flags.Parse(args); err != nil {
-		return opts, err
+		if errors.Is(err, flag.ErrHelp) {
+			return opts, err
+		}
+		return opts, fmt.Errorf("%w: %v", errFlagParsing, err)
 	}
 	if flags.NArg() != 0 {
 		flags.Usage()
@@ -127,6 +139,19 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return opts, errors.New("--timeout must be at least 1s")
 	}
 	return opts, nil
+}
+
+func jsonModeRequested(args []string) bool {
+	requested := false
+	for _, arg := range args {
+		switch arg {
+		case "--json", "--json=true", "--json=1", "--json=t", "--json=T", "--json=TRUE", "--json=True":
+			requested = true
+		case "--json=false", "--json=0", "--json=f", "--json=F", "--json=FALSE", "--json=False":
+			requested = false
+		}
+	}
+	return requested
 }
 
 func udpBudget(overall time.Duration) time.Duration {

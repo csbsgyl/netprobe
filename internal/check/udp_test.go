@@ -27,8 +27,8 @@ func TestProbeUDPUsesOneSocketAndCollectsAlternateResponses(t *testing.T) {
 	if len(report.Attempts) != 2 {
 		t.Fatalf("attempt count = %d, want 2; errors: %v", len(report.Attempts), report.Errors)
 	}
-	if len(report.Observations) < 4 {
-		t.Fatalf("observation count = %d, want at least 4; errors: %v", len(report.Observations), report.Errors)
+	if len(report.Observations) < 3 {
+		t.Fatalf("observation count = %d, want at least 3; errors: %v", len(report.Observations), report.Errors)
 	}
 	ports := servers.sourcePorts()
 	if len(ports) != 1 {
@@ -48,9 +48,73 @@ func TestProbeUDPUsesOneSocketAndCollectsAlternateResponses(t *testing.T) {
 		}
 	}
 	for _, endpoint := range servers.endpoints() {
-		if !direct[endpoint.ID] || !alternate[endpoint.ID] {
-			t.Errorf("endpoint %q responses: direct=%t alternate=%t", endpoint.ID, direct[endpoint.ID], alternate[endpoint.ID])
+		if !direct[endpoint.ID] {
+			t.Errorf("endpoint %q has no direct response", endpoint.ID)
 		}
+	}
+	if !alternate[servers.ids[0]] {
+		t.Error("primary endpoint has no pre-contact alternate response")
+	}
+	if alternate[servers.ids[1]] {
+		t.Error("secondary alternate response must not count after contacting the secondary endpoint")
+	}
+}
+
+func TestProbeUDPMultipleRoundsDoNotInflateRTT(t *testing.T) {
+	servers := newUDPTestPair(t)
+	defer servers.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	report := ProbeUDP(ctx, protocol.CreateSessionResponse{
+		Version:      protocol.Version,
+		SessionID:    "session-1",
+		Token:        "token-1",
+		UDPEndpoints: servers.endpoints(),
+	}, 3)
+	if len(report.Attempts) != 6 {
+		t.Fatalf("attempt count = %d, want 6; errors: %v", len(report.Attempts), report.Errors)
+	}
+	if len(report.Observations) < 3 {
+		t.Fatalf("observation count = %d, want at least 3", len(report.Observations))
+	}
+	if report.Observations[0].RTTMilliseconds >= 100 {
+		t.Fatalf("first response RTT = %.2fms, want less than 100ms", report.Observations[0].RTTMilliseconds)
+	}
+}
+
+func TestValidObservationRequiresResponseEndpointSemantics(t *testing.T) {
+	probeTime := time.Now()
+	probe := sentProbe{endpointID: "primary", sequence: 1, sentAt: probeTime}
+	observation := protocol.ObservationPacket{
+		Version:            protocol.Version,
+		Type:               protocol.PacketTypeObservation,
+		SessionID:          "session-1",
+		EndpointID:         "primary",
+		ResponseEndpointID: "primary",
+		ResponseKind:       protocol.ResponseKindDirect,
+		ProbeID:            "probe-1",
+		Sequence:           1,
+		SentAtUnixNano:     probeTime.UnixNano(),
+		ObservedIP:         "203.0.113.1",
+		ObservedPort:       12345,
+		Proof:              "proof-1",
+	}
+	alternates := map[string]string{"primary": "alternate", "alternate": "primary"}
+	if !validObservation("session-1", observation, probe, alternates) {
+		t.Fatal("valid direct observation rejected")
+	}
+	observation.ResponseEndpointID = "alternate"
+	if validObservation("session-1", observation, probe, alternates) {
+		t.Fatal("direct observation from alternate endpoint accepted")
+	}
+	observation.ResponseKind = protocol.ResponseKindAlternate
+	if !validObservation("session-1", observation, probe, alternates) {
+		t.Fatal("valid alternate observation rejected")
+	}
+	observation.ResponseEndpointID = "primary"
+	if validObservation("session-1", observation, probe, alternates) {
+		t.Fatal("alternate observation from receiving endpoint accepted")
 	}
 }
 
