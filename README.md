@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/insta
 固定安装某个发布版本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/install-server.sh | sudo env NETPROBE_VERSION=v0.2.0 DOMAIN=check.example.com sh
+curl -fsSL https://raw.githubusercontent.com/csbsgyl/netprobe/main/scripts/install-server.sh | sudo env NETPROBE_VERSION=v0.2.1 DOMAIN=check.example.com sh
 ```
 
 管理命令：

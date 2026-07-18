@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { LoaderCircle, Radar, ShieldCheck } from "@lucide/vue";
-import StatusRing from "./StatusRing.vue";
+import StatusPanel from "./StatusPanel.vue";
 import { useBrowserCheck } from "../composables/useBrowserCheck";
 
-const { state, running, verdictTitle, verdictDetail, runQuickCheck } = useBrowserCheck();
+const { running, runQuickCheck } = useBrowserCheck();
 
 const actionText = computed(() => (running.value ? "检测中" : "开始检测"));
 </script>
 
 <template>
   <section class="hero">
-    <div class="hero-copy rise">
-      <p class="eyebrow">// 网络适配检测</p>
-      <h1>确认当前网络<br />是否满足<span class="hl">连接要求</span></h1>
+    <div class="hero-copy">
+      <p class="eyebrow">网络适配检测</p>
+      <h1>确认当前网络是否满足连接要求</h1>
       <p class="lead">
-        快速检查公网出口与 HTTPS 连通性。需要 UDP 和 NAT 行为结论时，运行下方的一键深度检测。
+        在浏览器中检测公网出口、HTTPS 连通性与 UDP/STUN 路径，通常 5 秒内完成。
       </p>
       <div class="hero-actions">
         <button
@@ -25,8 +25,8 @@ const actionText = computed(() => (running.value ? "检测中" : "开始检测")
           :aria-busy="running"
           @click="runQuickCheck"
         >
-          <LoaderCircle v-if="running" class="spin" :size="18" aria-hidden="true" />
-          <Radar v-else :size="18" aria-hidden="true" />
+          <LoaderCircle v-if="running" class="spin" :size="17" aria-hidden="true" />
+          <Radar v-else :size="17" aria-hidden="true" />
           {{ actionText }}
         </button>
         <span class="privacy">
@@ -35,84 +35,68 @@ const actionText = computed(() => (running.value ? "检测中" : "开始检测")
         </span>
       </div>
     </div>
-
-    <aside class="verdict rise" :class="state" aria-live="polite" aria-atomic="true">
-      <StatusRing :state="state" />
-      <div class="verdict-text">
-        <p class="verdict-label">快速检测结果</p>
-        <h2>{{ verdictTitle }}</h2>
-        <p>{{ verdictDetail }}</p>
-      </div>
-    </aside>
+    <StatusPanel />
   </section>
 </template>
 
 <style scoped>
 .hero {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 64px;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
   align-items: center;
-  padding: 72px 0 64px;
+  padding: 56px 0 44px;
 }
 
 h1 {
   margin: 0;
-  max-width: 720px;
-  font-size: 62px;
-  line-height: 1.08;
-  font-weight: 760;
-  letter-spacing: 0;
-}
-
-.hl {
-  color: var(--accent);
+  font-size: 40px;
+  line-height: 1.18;
+  font-weight: 750;
 }
 
 .lead {
-  margin: 24px 0 0;
-  max-width: 620px;
+  margin: 16px 0 0;
+  max-width: 480px;
   color: var(--muted);
-  line-height: 1.75;
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .hero-actions {
+  margin-top: 28px;
   display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-top: 36px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .primary {
-  min-height: 50px;
-  padding: 0 24px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--accent-ink);
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: var(--accent);
+  color: #ffffff;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 15px;
-  box-shadow: 0 10px 28px -10px rgba(46, 230, 166, 0.5);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 600;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 
 .primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 34px -10px rgba(46, 230, 166, 0.6);
+  background: var(--accent-hover);
 }
 
 .primary:active:not(:disabled) {
-  transform: translateY(0);
+  background: var(--accent-active);
 }
 
 .primary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: wait;
 }
 
@@ -124,7 +108,7 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--faint);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -133,92 +117,35 @@ h1 {
   flex-shrink: 0;
 }
 
-.verdict {
-  display: flex;
-  align-items: center;
-  gap: 26px;
-  padding: 30px 32px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 24px 48px -28px rgba(0, 0, 0, 0.7);
-  animation-delay: 0.12s;
-  transition: border-color 0.3s ease;
-}
-
-.verdict.ok {
-  border-color: rgba(46, 230, 166, 0.4);
-}
-
-.verdict.warning {
-  border-color: rgba(242, 176, 78, 0.4);
-}
-
-.verdict.error {
-  border-color: rgba(239, 106, 86, 0.4);
-}
-
-.verdict-label {
-  margin: 0 0 8px;
-  color: var(--faint);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.verdict-text h2 {
-  margin: 0 0 10px;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.verdict-text p:last-child {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.6;
-  font-size: 13.5px;
-}
-
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
-    gap: 36px;
-    padding: 48px 0 52px;
+    gap: 32px;
+    padding: 40px 0 36px;
   }
 
   h1 {
-    font-size: 52px;
+    font-size: 32px;
+  }
+
+  .lead {
+    max-width: none;
   }
 }
 
 @media (max-width: 560px) {
   .hero {
-    padding: 36px 0 44px;
+    padding: 32px 0 32px;
+    gap: 28px;
   }
 
   h1 {
-    font-size: 40px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-    align-items: stretch;
+    font-size: 28px;
   }
 
   .primary {
+    width: 100%;
     justify-content: center;
-  }
-
-  .privacy {
-    justify-content: center;
-  }
-
-  .verdict {
-    flex-direction: column;
-    text-align: center;
-    padding: 26px 22px;
-    gap: 18px;
   }
 }
 </style>

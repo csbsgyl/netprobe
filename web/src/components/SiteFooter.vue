@@ -1,7 +1,7 @@
 <template>
   <footer class="site-footer">
     <span class="footer-brand">NetProbe</span>
-    <span>检测只代表当前设备、当前网络和本次测试时间。</span>
+    <span>检测结果只代表当前设备、当前网络和本次测试时间。</span>
   </footer>
 </template>
 
@@ -10,26 +10,25 @@
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 22px 24px;
   border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: var(--faint);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
 }
 
 .footer-brand {
-  color: var(--muted);
+  color: var(--ink);
   font-weight: 700;
-  font-family: var(--mono);
 }
 
 @media (max-width: 560px) {
   .site-footer {
     flex-direction: column;
     gap: 6px;
-    padding: 20px 18px;
+    padding: 18px 16px;
   }
 }
 </style>

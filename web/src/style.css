@@ -1,23 +1,25 @@
 :root {
-  --bg: #080d0b;
-  --panel: #0e1512;
-  --panel-2: #131c18;
-  --line: #1f2c26;
-  --line-strong: #2e4238;
-  --ink: #e9f4ee;
-  --muted: #8ba398;
-  --faint: #71877c;
-  --accent: #2ee6a6;
-  --accent-dim: rgba(46, 230, 166, 0.12);
-  --accent-ink: #04241a;
-  --warn: #f2b04e;
-  --warn-dim: rgba(242, 176, 78, 0.12);
-  --danger: #ef6a56;
-  --danger-dim: rgba(239, 106, 86, 0.12);
+  --bg: #f5f8f7;
+  --surface: #ffffff;
+  --surface-2: #eef3f1;
+  --ink: #14201c;
+  --muted: #5f6e68;
+  --line: #d8e1dd;
+  --line-strong: #b9c7c1;
+  --accent: #167a68;
+  --accent-hover: #125e50;
+  --accent-active: #0f5044;
+  --accent-dim: #e9f4f0;
+  --accent-2: #356fd1;
+  --accent-2-dim: #edf2fb;
+  --warn: #b45309;
+  --warn-dim: #fbf3e4;
+  --error: #be3d2e;
+  --error-dim: #faece9;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   color: var(--ink);
   background: var(--bg);
-  color-scheme: dark;
+  color-scheme: light;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-synthesis: none;
   letter-spacing: 0;
@@ -29,6 +31,7 @@
 
 body {
   margin: 0;
+  min-width: 320px;
   min-height: 100vh;
   background: var(--bg);
 }
@@ -46,14 +49,14 @@ code {
 }
 
 ::selection {
-  background: rgba(46, 230, 166, 0.28);
+  background: #cfe6dd;
   color: var(--ink);
 }
 
 a:focus-visible,
 button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
 }
 
 .sr-only {
@@ -74,13 +77,10 @@ button:focus-visible {
 
 /* 各区块共用的标题结构 */
 .eyebrow {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: var(--accent);
-  font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .section-head {
@@ -92,25 +92,22 @@ button:focus-visible {
 
 .section-head h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
 }
 
 .section-head time,
 .section-head .tested-at {
-  color: var(--faint);
+  color: var(--muted);
   font-family: var(--mono);
   font-size: 12px;
 }
 
-@keyframes rise {
-  from {
-    opacity: 1;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+@media (max-width: 560px) {
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
 
@@ -130,8 +127,13 @@ button:focus-visible {
   }
 }
 
-.rise {
-  animation: rise 0.55s cubic-bezier(0.22, 0.8, 0.32, 1) both;
+@keyframes slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

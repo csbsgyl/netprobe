@@ -22,12 +22,12 @@ main {
   max-width: 1120px;
   flex: 1;
   margin: 0 auto;
-  padding: 0 24px 88px;
+  padding: 0 24px 72px;
 }
 
 @media (max-width: 560px) {
   main {
-    padding: 0 18px 64px;
+    padding: 0 16px 56px;
   }
 }
 </style>

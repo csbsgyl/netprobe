@@ -2,14 +2,29 @@
 import { computed } from "vue";
 import { Network } from "@lucide/vue";
 import { useBrowserCheck } from "../composables/useBrowserCheck";
+import type { CheckState } from "../types";
+
+type ServiceStatus = "standby" | "checking" | "online" | "down";
 
 const { state } = useBrowserCheck();
-const serviceLabel = computed(() => {
-  if (state.value === "running") return "正在检测";
-  if (state.value === "error") return "检测服务异常";
-  if (state.value === "ok" || state.value === "warning") return "检测服务在线";
-  return "检测服务待命";
-});
+
+const statusMap: Record<CheckState, ServiceStatus> = {
+  idle: "standby",
+  running: "checking",
+  ok: "online",
+  warning: "online",
+  error: "down",
+};
+
+const statusText: Record<ServiceStatus, string> = {
+  standby: "检测服务待命",
+  checking: "正在检测",
+  online: "检测服务在线",
+  down: "检测服务异常",
+};
+
+const status = computed(() => statusMap[state.value]);
+const text = computed(() => statusText[status.value]);
 </script>
 
 <template>
@@ -18,7 +33,9 @@ const serviceLabel = computed(() => {
       <span class="brand-mark"><Network :size="17" aria-hidden="true" /></span>
       <span class="brand-name">NetProbe</span>
     </a>
-    <span class="service" :class="state" aria-live="polite"><i aria-hidden="true" />{{ serviceLabel }}</span>
+    <span class="service" :class="status" role="status" aria-live="polite">
+      <i aria-hidden="true" />{{ text }}
+    </span>
   </header>
 </template>
 
@@ -27,15 +44,14 @@ const serviceLabel = computed(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 62px;
+  height: 64px;
   padding: 0 max(24px, calc((100vw - 1120px) / 2));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(8, 13, 11, 0.82);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--surface);
 }
 
 .brand {
@@ -52,58 +68,66 @@ const serviceLabel = computed(() => {
   display: grid;
   place-items: center;
   color: var(--accent);
-  background: var(--accent-dim);
-  border: 1px solid rgba(46, 230, 166, 0.3);
-  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
 
 .brand-name {
   font-weight: 700;
   font-size: 16px;
-  letter-spacing: 0;
 }
 
 .service {
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 12px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .service i {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--faint);
-  box-shadow: 0 0 0 3px rgba(113, 135, 124, 0.12);
+  background: var(--line-strong);
+  flex-shrink: 0;
 }
 
-.service.running i,
-.service.ok i,
-.service.warning i {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+.service.checking {
+  color: var(--accent-2);
 }
 
-.service.running i {
+.service.checking i {
+  background: var(--accent-2);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
-.service.error {
-  color: var(--danger);
+.service.online {
+  color: var(--accent);
 }
 
-.service.error i {
-  background: var(--danger);
-  box-shadow: 0 0 0 3px var(--danger-dim);
+.service.online i {
+  background: var(--accent);
+}
+
+.service.down {
+  color: var(--error);
+}
+
+.service.down i {
+  background: var(--error);
 }
 
 @media (max-width: 560px) {
   .site-header {
     height: 56px;
-    padding: 0 18px;
+    padding: 0 16px;
+  }
+
+  .service {
+    font-size: 12px;
   }
 }
 </style>
