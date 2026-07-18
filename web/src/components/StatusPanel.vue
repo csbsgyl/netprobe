@@ -33,7 +33,7 @@ const statusIcon = computed(() => icons[state.value]);
 </script>
 
 <template>
-  <aside class="panel" aria-live="polite" aria-atomic="true">
+  <aside class="panel reveal reveal-d1" :class="state">
     <div class="panel-top">
       <span class="chip" :class="state">
         <component :is="statusIcon" :size="15" aria-hidden="true" class="chip-icon" />
@@ -44,17 +44,38 @@ const statusIcon = computed(() => icons[state.value]);
     <div class="progress" aria-hidden="true">
       <span class="progress-fill" :class="state" />
     </div>
-    <h2>{{ verdictTitle }}</h2>
-    <p class="panel-detail">{{ verdictDetail }}</p>
+    <div class="panel-message" role="status" aria-live="polite" aria-atomic="true">
+      <h2>{{ verdictTitle }}</h2>
+      <p class="panel-detail">{{ verdictDetail }}</p>
+    </div>
   </aside>
 </template>
 
 <style scoped>
 .panel {
+  min-height: 178px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(20, 32, 28, 0.05), 0 20px 44px -24px rgba(20, 32, 28, 0.16);
+  transition: border-color 0.4s ease;
+}
+
+.panel.running {
+  border-color: #c9d8f3;
+}
+
+.panel.ok {
+  border-color: #bcdfd3;
+}
+
+.panel.warning {
+  border-color: #ecd9b8;
+}
+
+.panel.error {
+  border-color: #f0cdc6;
 }
 
 .panel-top {

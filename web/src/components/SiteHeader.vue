@@ -2,29 +2,30 @@
 import { computed } from "vue";
 import { Network } from "@lucide/vue";
 import { useBrowserCheck } from "../composables/useBrowserCheck";
-import type { CheckState } from "../types";
+import { useServiceHealth } from "../composables/useServiceHealth";
 
 type ServiceStatus = "standby" | "checking" | "online" | "down";
 
-const { state } = useBrowserCheck();
-
-const statusMap: Record<CheckState, ServiceStatus> = {
-  idle: "standby",
-  running: "checking",
-  ok: "online",
-  warning: "online",
-  error: "down",
-};
+const { state: checkState } = useBrowserCheck();
+const { state: healthState } = useServiceHealth();
 
 const statusText: Record<ServiceStatus, string> = {
   standby: "检测服务待命",
-  checking: "正在检测",
+  checking: "正在检查服务",
   online: "检测服务在线",
   down: "检测服务异常",
 };
 
-const status = computed(() => statusMap[state.value]);
-const text = computed(() => statusText[status.value]);
+const status = computed<ServiceStatus>(() => {
+  if (checkState.value === "running") return "checking";
+  if (checkState.value === "error") return "down";
+  if (checkState.value === "ok" || checkState.value === "warning") return "online";
+  if (healthState.value === "error") return "down";
+  if (healthState.value === "online") return "online";
+  if (healthState.value === "checking") return "checking";
+  return "standby";
+});
+const text = computed(() => (checkState.value === "running" ? "正在检测" : statusText[status.value]));
 </script>
 
 <template>
@@ -33,7 +34,7 @@ const text = computed(() => statusText[status.value]);
       <span class="brand-mark"><Network :size="17" aria-hidden="true" /></span>
       <span class="brand-name">NetProbe</span>
     </a>
-    <span class="service" :class="status" role="status" aria-live="polite">
+    <span class="service" :class="status" role="status" aria-live="polite" :aria-busy="status === 'checking'">
       <i aria-hidden="true" />{{ text }}
     </span>
   </header>

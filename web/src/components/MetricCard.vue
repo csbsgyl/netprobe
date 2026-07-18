@@ -37,11 +37,14 @@ const statusClass = computed(() => (props.running ? "running" : props.tone));
   <div class="metric" :class="`s-${statusClass}`">
     <div class="metric-top">
       <span class="metric-label">
-        <component :is="icon" :size="14" aria-hidden="true" />{{ label }}
+        <span class="label-icon"><component :is="icon" :size="14" aria-hidden="true" /></span>
+        {{ label }}
       </span>
       <component :is="statusIcon" :size="16" aria-hidden="true" class="status-icon" />
     </div>
-    <strong class="metric-value mono">{{ value }}</strong>
+    <Transition name="swap" mode="out-in">
+      <strong class="metric-value mono" :key="value">{{ value }}</strong>
+    </Transition>
     <small>{{ helper }}</small>
   </div>
 </template>
@@ -53,6 +56,13 @@ const statusClass = computed(() => (props.running ? "running" : props.tone));
   border-radius: 8px;
   padding: 16px;
   min-width: 0;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: 0 12px 26px -16px rgba(20, 32, 28, 0.2);
 }
 
 .metric-top {
@@ -65,10 +75,22 @@ const statusClass = computed(() => (props.running ? "running" : props.tone));
 .metric-label {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--muted);
   font-size: 13px;
   white-space: nowrap;
+}
+
+.label-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  flex-shrink: 0;
 }
 
 .status-icon {

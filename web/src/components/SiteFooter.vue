@@ -1,12 +1,14 @@
 <template>
   <footer class="site-footer">
     <span class="footer-brand">NetProbe</span>
-    <span>检测结果只代表当前设备、当前网络和本次测试时间。</span>
+    <span>服务地址取决于当前访问域名；检测结果只代表本次设备、网络和测试时间。</span>
   </footer>
 </template>
 
 <style scoped>
 .site-footer {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;

@@ -31,13 +31,15 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
+  overflow-x: clip;
   background: var(--bg);
 }
 
 #app {
   min-height: 100vh;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -78,9 +80,20 @@ button:focus-visible {
 /* 各区块共用的标题结构 */
 .eyebrow {
   margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
 }
 
 .section-head {
@@ -134,6 +147,59 @@ button:focus-visible {
   100% {
     transform: translateX(260%);
   }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.reveal {
+  animation: fade-up 0.7s cubic-bezier(0.22, 0.8, 0.32, 1) both;
+}
+
+.reveal-d1 {
+  animation-delay: 0.08s;
+}
+
+.reveal-d2 {
+  animation-delay: 0.16s;
+}
+
+.reveal-d3 {
+  animation-delay: 0.24s;
+}
+
+/* 文本内容切换时的淡入淡出过渡 */
+.swap-enter-active,
+.swap-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.swap-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 @media (prefers-reduced-motion: reduce) {

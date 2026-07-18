@@ -76,14 +76,17 @@ async function runQuickCheck(): Promise<void> {
 
     state.value = payload.https && udp.ok ? "ok" : "warning";
     if (!payload.https) {
-      verdictDetail.value = "检测服务当前未通过 HTTPS 访问。请先检查域名证书，再运行深度命令复测。";
+      verdictDetail.value = "检测服务当前未通过 HTTPS 访问。请检查域名证书和反向代理配置。";
     } else if (!udp.ok) {
-      verdictDetail.value = "HTTPS 可用，但浏览器未确认 UDP/STUN 路径。建议运行深度命令复测。";
+      verdictDetail.value = "HTTPS 可用，但浏览器未确认 UDP/STUN 路径。请检查服务器 UDP 端口和安全组。";
     } else {
-      verdictDetail.value = "HTTPS 与浏览器 UDP/STUN 路径均可用。运行深度命令可继续判断 NAT 行为。";
+      verdictDetail.value = "HTTPS 与浏览器 UDP/STUN 路径均可用，当前服务可以接受网络检测请求。";
     }
   } catch (error) {
     state.value = "error";
+    publicIP.value = "未获取";
+    ipStatus.value = "检测服务未返回出口地址";
+    ipTone.value = "error";
     httpsResult.value = "失败";
     httpsTone.value = "error";
     udpResult.value = "未检测";

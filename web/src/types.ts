@@ -1,5 +1,3 @@
-export type Platform = "linux" | "windows";
-
 export type CheckState = "idle" | "running" | "ok" | "warning" | "error";
 
 /** 指标卡的状态色调，与检测结论无关的展示态用 idle。 */

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ArrowRightLeft, Globe, ShieldCheck, Wifi } from "@lucide/vue";
+import { computed } from "vue";
+import { Globe, Network, ShieldCheck, Wifi } from "@lucide/vue";
 import MetricCard from "./MetricCard.vue";
 import { useBrowserCheck } from "../composables/useBrowserCheck";
+import { useServiceHealth } from "../composables/useServiceHealth";
 
 const {
   running,
@@ -16,14 +18,28 @@ const {
   testedAt,
   testedAtISO,
 } = useBrowserCheck();
+const { state: healthState } = useServiceHealth();
+
+const serviceResult = computed(() => {
+  if (healthState.value === "online") return "在线";
+  if (healthState.value === "error") return "异常";
+  if (healthState.value === "idle") return "待命";
+  return "检查中";
+});
+
+const serviceTone = computed(() => {
+  if (healthState.value === "error") return "error";
+  if (healthState.value === "online") return "ok";
+  return "idle";
+});
 </script>
 
 <template>
-  <section class="results" aria-labelledby="resultHeading">
+  <section class="results reveal reveal-d2" aria-labelledby="resultHeading">
     <div class="section-head">
       <div>
         <p class="eyebrow">检测项目</p>
-        <h2 id="resultHeading">当前网络画像</h2>
+        <h2 id="resultHeading">当前服务与网络状态</h2>
       </div>
       <time v-if="testedAtISO" :datetime="testedAtISO">{{ testedAt }}</time>
       <span v-else class="tested-at">{{ testedAt }}</span>
@@ -55,11 +71,12 @@ const {
         :running="running"
       />
       <MetricCard
-        label="NAT 映射行为"
-        value="需深度检测"
-        helper="使用同一端口访问双探测端口"
-        tone="idle"
-        :icon="ArrowRightLeft"
+        label="服务状态"
+        :value="serviceResult"
+        helper="部署健康检查"
+        :tone="serviceTone"
+        :icon="Network"
+        :running="healthState === 'checking'"
       />
     </div>
   </section>
