@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -56,6 +57,37 @@ func TestCreateAndCompleteSession(t *testing.T) {
 	_ = json.NewDecoder(done.Body).Decode(&report)
 	if report.Verdict != protocol.VerdictFail {
 		t.Fatalf("verdict = %q", report.Verdict)
+	}
+}
+
+func TestCreateSessionRejectsOversizedClientMetadata(t *testing.T) {
+	tooLong := strings.Repeat("x", protocol.MaxClientInfoFieldBytes+1)
+	tests := []struct {
+		name string
+		info protocol.ClientInfo
+	}{
+		{name: "name", info: protocol.ClientInfo{Name: tooLong}},
+		{name: "version", info: protocol.ClientInfo{Version: tooLong}},
+		{name: "os", info: protocol.ClientInfo{OS: tooLong}},
+		{name: "arch", info: protocol.ClientInfo{Arch: tooLong}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := testServer()
+			payload, err := json.Marshal(protocol.CreateSessionRequest{Version: protocol.Version, Client: test.info})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPost, protocol.CreateSessionPath, bytes.NewReader(payload))
+			response := httptest.NewRecorder()
+			server.Handler().ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body = %s", response.Code, response.Body.String())
+			}
+			if len(server.store.sessions) != 0 {
+				t.Fatalf("created %d sessions from invalid metadata", len(server.store.sessions))
+			}
+		})
 	}
 }
 
@@ -160,4 +192,12 @@ func TestSPAFileServer(t *testing.T) {
 	if missingResponse.Code != http.StatusNotFound {
 		t.Fatalf("missing asset status = %d", missingResponse.Code)
 	}
+}
+
+func TestReplyUDPHandlesShutdownWithoutConnection(t *testing.T) {
+	server := testServer()
+	server.udp = nil
+	server.replyUDP(0, 0, protocol.ResponseKindDirect, protocol.ProbePacket{
+		SessionID: "missing-session", ProbeID: "probe", Sequence: 1,
+	}, &net.UDPAddr{IP: net.ParseIP("203.0.113.9"), Port: 40000})
 }

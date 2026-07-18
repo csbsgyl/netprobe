@@ -32,6 +32,10 @@ const (
 	CheckPass = "pass"
 	CheckFail = "fail"
 	CheckWarn = "warn"
+
+	// MaxClientInfoFieldBytes bounds each client metadata field retained in a
+	// server-side session. These values are identifiers, not free-form text.
+	MaxClientInfoFieldBytes = 128
 )
 
 // CompleteSessionPath returns the completion endpoint for a session.
@@ -44,6 +48,25 @@ type ClientInfo struct {
 	Version string `json:"version"`
 	OS      string `json:"os"`
 	Arch    string `json:"arch"`
+}
+
+// Validate checks that client metadata is small enough to retain in a session.
+func (c ClientInfo) Validate() error {
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{name: "name", value: c.Name},
+		{name: "version", value: c.Version},
+		{name: "os", value: c.OS},
+		{name: "arch", value: c.Arch},
+	}
+	for _, field := range fields {
+		if len(field.value) > MaxClientInfoFieldBytes {
+			return fmt.Errorf("client %s exceeds %d bytes", field.name, MaxClientInfoFieldBytes)
+		}
+	}
+	return nil
 }
 
 type CreateSessionRequest struct {

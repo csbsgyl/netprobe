@@ -155,6 +155,10 @@ func (s *Server) sessions(w http.ResponseWriter, request *http.Request) {
 		writeProtocolVersionError(w, input.Version)
 		return
 	}
+	if err := input.Client.Validate(); err != nil {
+		http.Error(w, "invalid client metadata: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	session, err := s.store.Create(clientIP(request), input.Client)
 	if err != nil {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
@@ -276,15 +280,21 @@ func (s *Server) replyUDP(receivedAt, respondFrom int, kind string, probe protoc
 		Proof: proof,
 	}
 	payload, _ := json.Marshal(reply)
-	s.mu.RLock()
-	responseConn := s.udp[respondFrom]
-	_, _ = responseConn.WriteToUDP(payload, remote)
-	s.mu.RUnlock()
+	// Record before sending so a fast client cannot complete the session before
+	// the authenticated observation is visible to the evaluator.
 	s.store.Record(probe.SessionID, protocol.UDPObservation{
 		EndpointID: reply.EndpointID, ResponseEndpointID: reply.ResponseEndpointID, ResponseKind: reply.ResponseKind,
 		ProbeID: reply.ProbeID, Sequence: reply.Sequence, ObservedIP: reply.ObservedIP, ObservedPort: reply.ObservedPort,
 		Proof: reply.Proof,
 	})
+	s.mu.RLock()
+	if respondFrom < 0 || respondFrom >= len(s.udp) || s.udp[respondFrom] == nil {
+		s.mu.RUnlock()
+		return
+	}
+	responseConn := s.udp[respondFrom]
+	_, _ = responseConn.WriteToUDP(payload, remote)
+	s.mu.RUnlock()
 }
 
 func endpointID(index int) string {

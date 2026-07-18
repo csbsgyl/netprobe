@@ -1,6 +1,34 @@
 package protocol
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestClientInfoValidateFieldLimits(t *testing.T) {
+	valid := strings.Repeat("x", MaxClientInfoFieldBytes)
+	if err := (ClientInfo{Name: valid, Version: valid, OS: valid, Arch: valid}).Validate(); err != nil {
+		t.Fatalf("client metadata at the limit was rejected: %v", err)
+	}
+
+	tooLong := strings.Repeat("x", MaxClientInfoFieldBytes+1)
+	tests := []struct {
+		name string
+		info ClientInfo
+	}{
+		{name: "name", info: ClientInfo{Name: tooLong}},
+		{name: "version", info: ClientInfo{Version: tooLong}},
+		{name: "os", info: ClientInfo{OS: tooLong}},
+		{name: "arch", info: ClientInfo{Arch: tooLong}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.info.Validate(); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
 
 func TestCreateSessionResponseValidate(t *testing.T) {
 	valid := CreateSessionResponse{

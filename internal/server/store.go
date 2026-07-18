@@ -69,8 +69,8 @@ func (s *SessionStore) Create(publicIP string, client protocol.ClientInfo) (*Ses
 
 func (s *SessionStore) Valid(id, token string) (*Session, bool) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	session, ok := s.sessions[id]
-	s.mu.RUnlock()
 	if !ok || time.Now().After(session.ExpiresAt) || !hmac.Equal([]byte(token), []byte(s.sign(id, session.ExpiresAt))) {
 		return nil, false
 	}

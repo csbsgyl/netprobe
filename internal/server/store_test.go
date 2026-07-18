@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,4 +65,31 @@ func TestSessionStoreCapsRecordedObservations(t *testing.T) {
 	if len(stored.ServerProbes) != maxSessionObservations {
 		t.Fatalf("recorded observations = %d, want %d", len(stored.ServerProbes), maxSessionObservations)
 	}
+}
+
+func TestSessionStoreValidCanSnapshotWhileRecording(t *testing.T) {
+	store := NewSessionStore("secret", time.Minute)
+	session, err := store.Create("203.0.113.9", protocol.ClientInfo{Name: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var group sync.WaitGroup
+	group.Add(2)
+	go func() {
+		defer group.Done()
+		for index := 0; index < 500; index++ {
+			store.Record(session.ID, protocol.UDPObservation{Sequence: uint64(index)})
+		}
+	}()
+	go func() {
+		defer group.Done()
+		for index := 0; index < 500; index++ {
+			if _, ok := store.Valid(session.ID, session.Token); !ok {
+				t.Errorf("snapshot %d was rejected", index)
+				return
+			}
+		}
+	}()
+	group.Wait()
 }
